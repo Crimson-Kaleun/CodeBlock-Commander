@@ -9,7 +9,7 @@ lifecycleRuntimeKtx = "2.6.1"
 activityCompose = "1.8.0"
 composeBom = "2024.09.00"
 room_version = "2.7.1"
-compilerKspVersion = "1.8.21-1.0.11"
+compilerKspVersion = "2.0.21-1.0.25"
 
 [libraries]
 androidx-room = { group = "androidx.room", name = "room-ktx", version.ref = "room_version" }
