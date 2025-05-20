@@ -4,7 +4,9 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -18,18 +20,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.input.pointer.pointerInput
+
+
+//import com.example.codeblockcommander.ui.theme.AppState
+//import com.example.codeblockcommander.ui.theme.rememberAppState
+
+
+
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun WorkPlace(navController: NavController) {
+    val appState = rememberAppState()
 
     var showBlockMenu by remember { mutableStateOf(false) }
     var showSettingsMenu by remember { mutableStateOf(false) }
-    var consoleText by remember { mutableStateOf("Консоль выполнения:\n") }
     var blocks by remember { mutableStateOf(emptyList<CodeBlock>()) }
     var draggedBlock by remember { mutableStateOf<CodeBlock?>(null) }
     var editedBlock by remember { mutableStateOf<CodeBlock?>(null) }
+    var nextBlock by remember { mutableStateOf<Int?>(null) }
 
-    val blockTypes = listOf("Print", "If", "For", "Variable", "Function")
+    val blockTypes = listOf("Print", "Declare", "If", "For", "Set", "Function")
+
+    var isDarkTheme by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -54,9 +68,18 @@ fun WorkPlace(navController: NavController) {
                                         x = 500f,
                                         y = 200f,
                                         params = when (type) {
-                                            "Print" -> mapOf("text" to "Hello")
-                                            "If" -> mapOf("condition" to "true")
-                                            else -> emptyMap()
+                                            "Print" -> mapOf("text" to "Hello", "nextBlock" to "-1")
+                                            "Declare" -> mapOf("varName" to "", "varValue" to "", "nextBlock" to "-1")
+                                            "Set" -> mapOf("varName" to "", "varValue" to "", "nextBlock" to "-1")
+                                            "If" -> mapOf(
+                                                "leftExpr" to "",
+                                                "condition" to "==",
+                                                "rightExpr" to "",
+                                                "trueBlock" to "-1",
+                                                "falseBlock" to "-1",
+                                                "nextBlock" to "-1"
+                                            )
+                                            else -> mapOf("nextBlock" to "-1")
                                         }
                                     )
                                     showBlockMenu = false
@@ -64,20 +87,43 @@ fun WorkPlace(navController: NavController) {
                             )
                         }
                     }
+
+                    DropdownMenu(
+                        expanded = showSettingsMenu,
+                        onDismissRequest = { showSettingsMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Главное меню") },
+                            onClick = {
+                                navController.popBackStack()
+                                showSettingsMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (isDarkTheme) "Светлая тема" else "Тёмная тема") },
+                            onClick = {
+                                isDarkTheme = !isDarkTheme
+                                showSettingsMenu = false
+                            }
+                        )
+                    }
                 }
             )
         },
         bottomBar = {
-            //Console
             Column(
                 modifier = Modifier
+                    .verticalScroll(rememberScrollState())
                     .fillMaxWidth()
+                    .height(240.dp)
                     .background(Color.LightGray)
-                    .padding(48.dp)
             ) {
                 Text(
-                    text = consoleText,
-                    modifier = Modifier.fillMaxWidth(),
+                    text = appState.consoleText,
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                        .fillMaxWidth()
+                        .padding(start = 8.dp, end = 8.dp, top=8.dp, bottom = 28.dp),
                     color = Color.Black
                 )
             }
@@ -87,7 +133,6 @@ fun WorkPlace(navController: NavController) {
             .fillMaxSize()
             .padding(padding)
         ) {
-            // Рабочая область
             Box(modifier = Modifier.fillMaxSize()) {
                 blocks.forEach { block ->
                     val isDragged = draggedBlock?.id == block.id
@@ -95,6 +140,7 @@ fun WorkPlace(navController: NavController) {
                     DraggableBlock(
                         block = block,
                         isDragged = isDragged,
+                        blocks = blocks,
                         onDragStart = { draggedBlock = block },
                         onDragEnd = { draggedBlock = null },
                         onEdit = { editedBlock = block },
@@ -102,21 +148,44 @@ fun WorkPlace(navController: NavController) {
                             blocks = blocks.map {
                                 if (it.id == block.id) it.copy(x = x, y = y) else it
                             }
+                        },
+                        onNextBlockSelected = { blockId, nextBlockId ->
+                            blocks = blocks.map { b ->
+                                if (b.id == blockId) {
+                                    val newParams = b.params.toMutableMap()
+                                    newParams["nextBlock"] = nextBlockId.toString()
+                                    b.copy(params = newParams)
+                                } else {
+                                    b
+                                }
+                            }
                         }
                     )
                 }
             }
 
-            //Меню блока
             editedBlock?.let { block ->
                 BlockEditDialog(
                     block = block,
+                    blocks = blocks,
+                    appState = appState,
                     onDismiss = { editedBlock = null },
                     onSave = { newParams ->
                         blocks = blocks.map {
                             if (it.id == block.id) it.copy(params = newParams) else it
                         }
                         editedBlock = null
+                    },
+                    onNextBlockSelected = { blockId, nextBlockId ->
+                        blocks = blocks.map { b ->
+                            if (b.id == blockId) {
+                                val newParams = b.params.toMutableMap()
+                                newParams["nextBlock"] = nextBlockId.toString()
+                                b.copy(params = newParams)
+                            } else {
+                                b
+                            }
+                        }
                     }
                 )
             }
@@ -129,14 +198,17 @@ fun WorkPlace(navController: NavController) {
 fun DraggableBlock(
     block: CodeBlock,
     isDragged: Boolean,
+    blocks: List<CodeBlock>,
     onDragStart: () -> Unit,
     onDragEnd: () -> Unit,
     onEdit: () -> Unit,
-    onPositionUpdate: (Float, Float) -> Unit
+    onPositionUpdate: (Float, Float) -> Unit,
+    onNextBlockSelected: (Int, Int) -> Unit
 ) {
     val d = LocalDensity.current
     var offsetX by remember { mutableStateOf(block.x) }
     var offsetY by remember { mutableStateOf(block.y) }
+    var showNextBlockMenu by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
@@ -145,6 +217,7 @@ fun DraggableBlock(
             .background(
                 color = when (block.type) {
                     "Print" -> Color(0xFF4CAF50)
+                    "Declare" -> Color(0xFF009688)
                     "If" -> Color(0xFF2196F3)
                     "For" -> Color(0xFFFFC107)
                     else -> Color(0xFF9C27B0)
@@ -157,11 +230,7 @@ fun DraggableBlock(
             )
             .pointerInput(block.id) {
                 detectDragGestures(
-                    onDragStart = {
-                        //offsetX = 0f
-                        //offsetY = 0f
-                        onDragStart()
-                    },
+                    onDragStart = { onDragStart() },
                     onDrag = { change, dragAmount ->
                         change.consume()
                         offsetX += dragAmount.x
@@ -170,8 +239,6 @@ fun DraggableBlock(
                     },
                     onDragEnd = {
                         onPositionUpdate(block.x + offsetX, block.y + offsetY)
-                        //offsetX = 0f
-                        //offsetY = 0f
                         onDragEnd()
                     }
                 )
@@ -184,12 +251,61 @@ fun DraggableBlock(
         ) {
             Text(block.type, color = Color.White)
             Text("🟢", modifier = Modifier.padding(top = 4.dp))
-            if (block.params.isNotEmpty()) {
+
+            // Display block specific info
+            when (block.type) {
+                "Print" -> Text(block.params["text"] ?: "", color = Color.White, fontSize = 12.sp)
+                "Declare" -> Text("${block.params["varName"]} = ${block.params["varValue"]}",
+                    color = Color.White, fontSize = 12.sp)
+                "Set" -> Text("${block.params["varName"]} = ${block.params["varValue"]}",
+                    color = Color.White, fontSize = 12.sp)
+                "If" -> Text("${block.params["leftExpr"]} ${block.params["condition"]} ${block.params["rightExpr"]}",
+                    color = Color.White, fontSize = 12.sp)
+            }
+
+            // Next block selector
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+                    .background(Color(0x55000000))
+                    .clickable { showNextBlockMenu = true }
+            ) {
+                val nextBlockId = block.params["nextBlock"]?.toIntOrNull() ?: -1
+                val nextBlock = blocks.find { it.id == nextBlockId }
+
                 Text(
-                    block.params.values.first().toString(),
+                    text = if (nextBlock != null) {
+                        "Next: ${getBlockDisplayName(nextBlock, blocks)}"
+                    } else {
+                        "Next: none"
+                    },
                     color = Color.White,
-                    fontSize = 12.sp
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(4.dp)
                 )
+
+                DropdownMenu(
+                    expanded = showNextBlockMenu,
+                    onDismissRequest = { showNextBlockMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("None") },
+                        onClick = {
+                            onNextBlockSelected(block.id, -1)
+                            showNextBlockMenu = false
+                        }
+                    )
+                    blocks.filter { it.id != block.id }.forEach { nextBlock ->
+                        DropdownMenuItem(
+                            text = { Text(getBlockDisplayName(nextBlock, blocks)) },
+                            onClick = {
+                                onNextBlockSelected(block.id, nextBlock.id)
+                                showNextBlockMenu = false
+                            }
+                        )
+                    }
+                }
             }
         }
     }
@@ -197,11 +313,25 @@ fun DraggableBlock(
 
 @Composable
 fun BlockEditDialog(
+    appState: AppState,
     block: CodeBlock,
+    blocks: List<CodeBlock>,
     onDismiss: () -> Unit,
-    onSave: (Map<String, String>) -> Unit
+    onSave: (Map<String, String>) -> Unit,
+    onNextBlockSelected: (Int, Int) -> Unit
 ) {
-    var textValue by remember { mutableStateOf(block.params.values.firstOrNull() ?: "") }
+    var showNextBlockMenu by remember { mutableStateOf(false) }
+    var showTrueBlockMenu by remember { mutableStateOf(false) }
+    var showFalseBlockMenu by remember { mutableStateOf(false) }
+
+    // Локальные состояния для редактируемых полей
+    var textValue by remember { mutableStateOf(block.params["text"] ?: "") }
+    var varName by remember { mutableStateOf(block.params["varName"] ?: "") }
+    var varValue by remember { mutableStateOf(block.params["varValue"] ?: "") }
+    var leftExpr by remember { mutableStateOf(block.params["leftExpr"] ?: "") }
+    var condition by remember { mutableStateOf(block.params["condition"] ?: "==") }
+    var rightExpr by remember { mutableStateOf(block.params["rightExpr"] ?: "") }
+    var nextBlock by remember { mutableStateOf(block.params["nextBlock"] ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -213,17 +343,187 @@ fun BlockEditDialog(
                         Text("Текст для вывода:")
                         TextField(
                             value = textValue,
-                            onValueChange = {
-                                textValue = it
-                                //consoleText += "${textValue}\n"
+                            onValueChange = { textValue = it }
+                        )
+
+                        // Next block selector
+                        Text("Следующий блок:", modifier = Modifier.padding(top = 8.dp))
+                        Button(
+                            onClick = { showNextBlockMenu = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(blocks.find { it.id == (block.params["nextBlock"]?.toIntOrNull() ?: -1)?.takeIf { it != -1 }}?.let { getBlockDisplayName(it, blocks) } ?: "Выберите блок")
+                        }
+                    }
+                    "Declare" -> {
+                        Text("Имя переменной:")
+                        TextField(
+                            value = varName,
+                            onValueChange = { varName = it }
+                        )
+                        Text("Значение:", modifier = Modifier.padding(top = 8.dp))
+                        TextField(
+                            value = varValue,
+                            onValueChange = { varValue = it }
+                        )
+
+                        Text("Следующий блок:", modifier = Modifier.padding(top = 8.dp))
+                        Button(
+                            onClick = { showNextBlockMenu = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(blocks.find { it.id == (block.params["nextBlock"]?.toIntOrNull() ?: -1)?.takeIf { it != -1 }}?.let { getBlockDisplayName(it, blocks) } ?: "Выберите блок")
+                        }
+                    }
+                    "Set" -> {
+                        Text("Имя переменной:")
+                        TextField(
+                            value = varName,
+                            onValueChange = { varName = it }
+                        )
+                        Text("Значение:", modifier = Modifier.padding(top = 8.dp))
+                        TextField(
+                            value = varValue,
+                            onValueChange = { varValue = it }
+                        )
+
+                        Text("Следующий блок:", modifier = Modifier.padding(top = 8.dp))
+                        Button(
+                            onClick = { showNextBlockMenu = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(blocks.find { it.id == (block.params["nextBlock"]?.toIntOrNull() ?: -1)?.takeIf { it != -1 }}?.let { getBlockDisplayName(it, blocks) } ?: "Выберите блок")
+                        }
+                    }
+                    "If" -> {
+                        Text("Условие:", modifier = Modifier.padding(top = 8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextField(
+                                value = leftExpr,
+                                onValueChange = { leftExpr = it },
+                                modifier = Modifier.weight(1f)
+                            )
+                            DropdownMenu(
+                                expanded = showNextBlockMenu,
+                                onDismissRequest = { showNextBlockMenu = false }
+                            ) {
+                                listOf("==", "!=", ">", "<", ">=", "<=").forEach { cond ->
+                                    DropdownMenuItem(
+                                        text = { Text(cond) },
+                                        onClick = {
+                                            condition = cond
+                                            showNextBlockMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                            Text(condition, modifier = Modifier
+                                .padding(horizontal = 8.dp)
+                                .clickable { showNextBlockMenu = true })
+                            TextField(
+                                value = rightExpr,
+                                onValueChange = { rightExpr = it },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Text("Блок если true:", modifier = Modifier.padding(top = 8.dp))
+                        Button(
+                            onClick = { showTrueBlockMenu = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(blocks.find { it.id == (block.params["trueBlock"]?.toIntOrNull() ?: -1)?.takeIf { it != -1 }}?.let { getBlockDisplayName(it, blocks) } ?: "Выберите блок")
+                        }
+
+                        Text("Блок если false:", modifier = Modifier.padding(top = 8.dp))
+                        Button(
+                            onClick = { showFalseBlockMenu = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(blocks.find { it.id == (block.params["falseBlock"]?.toIntOrNull() ?: -1)?.takeIf { it != -1 }}?.let { getBlockDisplayName(it, blocks) } ?: "Выберите блок")
+                        }
+
+                        Text("Следующий блок:", modifier = Modifier.padding(top = 8.dp))
+                        Button(
+                            onClick = { showNextBlockMenu = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(blocks.find { it.id == (block.params["nextBlock"]?.toIntOrNull() ?: -1)?.takeIf { it != -1 }}?.let { getBlockDisplayName(it, blocks) } ?: "Выберите блок")
+                        }
+                    }
+                }
+
+                // Dropdown menus for block selection
+                DropdownMenu(
+                    expanded = showNextBlockMenu && block.type != "If",
+                    onDismissRequest = { showNextBlockMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("None") },
+                        onClick = {
+                            onNextBlockSelected(block.id, -1)
+                            showNextBlockMenu = false
+                        }
+                    )
+                    blocks.filter { it.id != block.id }.forEach { nextBlock ->
+                        DropdownMenuItem(
+                            text = { Text(getBlockDisplayName(nextBlock, blocks)) },
+                            onClick = {
+                                onNextBlockSelected(block.id, nextBlock.id)
+                                showNextBlockMenu = false
                             }
                         )
                     }
-                    "If" -> {
-                        Text("Условие:")
-                        TextField(
-                            value = textValue,
-                            onValueChange = { textValue = it }
+                }
+
+                DropdownMenu(
+                    expanded = showTrueBlockMenu,
+                    onDismissRequest = { showTrueBlockMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("None") },
+                        onClick = {
+                            val newParams = block.params.toMutableMap()
+                            newParams["trueBlock"] = "-1"
+                            onSave(newParams)
+                            showTrueBlockMenu = false
+                        }
+                    )
+                    blocks.filter { it.id != block.id }.forEach { nextBlock ->
+                        DropdownMenuItem(
+                            text = { Text(getBlockDisplayName(nextBlock, blocks)) },
+                            onClick = {
+                                val newParams = block.params.toMutableMap()
+                                newParams["trueBlock"] = nextBlock.id.toString()
+                                onSave(newParams)
+                                showTrueBlockMenu = false
+                            }
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = showFalseBlockMenu,
+                    onDismissRequest = { showFalseBlockMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("None") },
+                        onClick = {
+                            val newParams = block.params.toMutableMap()
+                            newParams["falseBlock"] = "-1"
+                            onSave(newParams)
+                            showFalseBlockMenu = false
+                        }
+                    )
+                    blocks.filter { it.id != block.id }.forEach { nextBlock ->
+                        DropdownMenuItem(
+                            text = { Text(getBlockDisplayName(nextBlock, blocks)) },
+                            onClick = {
+                                val newParams = block.params.toMutableMap()
+                                newParams["falseBlock"] = nextBlock.id.toString()
+                                onSave(newParams)
+                                showFalseBlockMenu = false
+                            }
                         )
                     }
                 }
@@ -232,9 +532,38 @@ fun BlockEditDialog(
         confirmButton = {
             Button(onClick = {
                 val newParams = when (block.type) {
-                    "Print" -> mapOf("text" to textValue)
-                    "If" -> mapOf("condition" to textValue)
-                    else -> emptyMap()
+                    "Print" -> {
+                        appState.appendToConsole("Вывод: $textValue")
+                        mapOf(
+                            "text" to textValue,
+                            "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                        )
+                    }
+                    "Declare" -> {
+                        mapOf(
+                            "varName" to varName,
+                            "varValue" to varValue,
+                            "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                        )
+                    }
+                    "Set" -> {
+                        mapOf(
+                            "varName" to varName,
+                            "varValue" to varValue,
+                            "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                        )
+                    }
+                    "If" -> {
+                        mapOf(
+                            "leftExpr" to leftExpr,
+                            "condition" to condition,
+                            "rightExpr" to rightExpr,
+                            "trueBlock" to (block.params["trueBlock"] ?: "-1"),
+                            "falseBlock" to (block.params["falseBlock"] ?: "-1"),
+                            "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                        )
+                    }
+                    else -> block.params
                 }
                 onSave(newParams)
             }) {
@@ -249,10 +578,11 @@ fun BlockEditDialog(
     )
 }
 
-data class CodeBlock(
-    val id: Int,
-    val type: String,
-    val x: Float,
-    val y: Float,
-    val params: Map<String, String> = emptyMap()
-)
+fun getBlockDisplayName(block: CodeBlock, allBlocks: List<CodeBlock>): String {
+    val sameTypeBlocks = allBlocks.filter { it.type == block.type }
+    return if (sameTypeBlocks.size > 1) {
+        "${block.type} #${sameTypeBlocks.indexOf(block) + 1}"
+    } else {
+        block.type
+    }
+}
