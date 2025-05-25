@@ -33,7 +33,19 @@ data class CodeBlock(
     val y: Float,
     val params: Map<String, String> = emptyMap(),
     val connections: List<BlockConnection> = emptyList()
-)
+) {
+    fun generateCode(): String {
+        return when (type) {
+            "Start" -> "// Начало программы"
+            "End" -> "// Конец программы"
+            "Print" -> "println(\"${params["text"]}\")"
+            "Declare" -> "var ${params["varName"]} = ${params["varValue"]}"
+            "Set" -> "${params["varName"]} = ${params["varValue"]}"
+            "If" -> "if (${params["leftExpr"]} ${params["condition"]} ${params["rightExpr"]}) { ... }"
+            else -> "// $type блок"
+        }
+    }
+}
 
 @Composable
 fun rememberAppState(): AppState {

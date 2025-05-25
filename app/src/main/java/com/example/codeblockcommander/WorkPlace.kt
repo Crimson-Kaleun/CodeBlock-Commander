@@ -41,7 +41,7 @@ fun WorkPlace(navController: NavController) {
     var editedBlock by remember { mutableStateOf<CodeBlock?>(null) }
     var nextBlock by remember { mutableStateOf<Int?>(null) }
 
-    val blockTypes = listOf("Print", "Declare", "If", "For", "Set", "Function")
+    val blockTypes = listOf("Start", "End", "Print", "Declare", "If", "For", "Set", "Function")
 
     var isDarkTheme by remember { mutableStateOf(false) }
 
@@ -50,6 +50,33 @@ fun WorkPlace(navController: NavController) {
             TopAppBar(
                 title = { Text("Рабочая область") },
                 actions = {
+                    Row {
+                        // Кнопка запуска
+                        FloatingActionButton(
+                            onClick = { executeProgram(appState, blocks) },
+                            modifier = Modifier.padding(end = 8.dp),
+                            containerColor = Color.Green
+                        ) {
+                            Icon(Icons.Default.PlayArrow, "Запуск")
+                        }
+
+                        // Кнопка отладки
+                        FloatingActionButton(
+                            onClick = { debugProgram(appState, blocks) },
+                            modifier = Modifier.padding(end = 8.dp),
+                            containerColor = Color.Blue
+                        ) {
+                            Icon(Icons.Default.Build, "Отладка")
+                        }
+
+                        // Кнопка остановки
+                        FloatingActionButton(
+                            onClick = { stopProgram(appState) },
+                            containerColor = Color.Red
+                        ) {
+                            Icon(Icons.Default.Lock, "Стоп")
+                        }
+                    }
                     IconButton(onClick = { showBlockMenu = true }) {
                         Icon(Icons.Default.Add, "Добавить блок")
                     }
@@ -62,12 +89,22 @@ fun WorkPlace(navController: NavController) {
                             DropdownMenuItem(
                                 text = { Text(type) },
                                 onClick = {
+                                    if (type == "Start" && blocks.any { it.type == "Start" }) {
+                                        appState.appendToConsole("Ошибка: блок Start уже существует!")
+                                        return@DropdownMenuItem
+                                    }
+                                    if (type == "End" && blocks.any { it.type == "End" }) {
+                                        appState.appendToConsole("Ошибка: блок End уже существует!")
+                                        return@DropdownMenuItem
+                                    }
                                     blocks = blocks + CodeBlock(
                                         id = System.currentTimeMillis().toInt(),
                                         type = type,
                                         x = 500f,
                                         y = 200f,
                                         params = when (type) {
+                                            "Start" -> mapOf("nextBlock" to "-1")
+                                            "End" -> emptyMap()
                                             "Print" -> mapOf("text" to "Hello", "nextBlock" to "-1")
                                             "Declare" -> mapOf("varName" to "", "varValue" to "", "nextBlock" to "-1")
                                             "Set" -> mapOf("varName" to "", "varValue" to "", "nextBlock" to "-1")
@@ -87,6 +124,9 @@ fun WorkPlace(navController: NavController) {
                             )
                         }
                     }
+
+
+
 
                     DropdownMenu(
                         expanded = showSettingsMenu,
@@ -128,6 +168,7 @@ fun WorkPlace(navController: NavController) {
                 )
             }
         }
+
     ) { padding ->
         Box(modifier = Modifier
             .fillMaxSize()
@@ -253,6 +294,7 @@ fun DraggableBlock(
             Text("🟢", modifier = Modifier.padding(top = 4.dp))
 
             // Display block specific info
+
             when (block.type) {
                 "Print" -> Text(block.params["text"] ?: "", color = Color.White, fontSize = 12.sp)
                 "Declare" -> Text("${block.params["varName"]} = ${block.params["varValue"]}",
@@ -376,24 +418,46 @@ fun BlockEditDialog(
                         }
                     }
                     "Set" -> {
-                        Text("Имя переменной:")
-                        TextField(
-                            value = varName,
-                            onValueChange = { varName = it }
-                        )
+                        val declaredVars = blocks
+                            .filter { it.type == "Declare" }
+                            .mapNotNull { it.params["varName"] }
+                            .filter { it.isNotBlank() }
+                            .distinct()
+
+                        var showVarMenu by remember { mutableStateOf(false) }
+
+                        Text("Выберите переменную:")
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = varName.ifEmpty { "Выберите переменную" },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showVarMenu = true }
+                                    .padding(8.dp)
+                                    .background(Color.LightGray)
+                            )
+
+                            DropdownMenu(
+                                expanded = showVarMenu,
+                                onDismissRequest = { showVarMenu = false }
+                            ) {
+                                declaredVars.forEach { _varName ->
+                                    DropdownMenuItem(
+                                        text = { Text(_varName) },
+                                        onClick = {
+                                            varName = _varName
+                                            showVarMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
                         Text("Значение:", modifier = Modifier.padding(top = 8.dp))
                         TextField(
                             value = varValue,
                             onValueChange = { varValue = it }
                         )
-
-                        Text("Следующий блок:", modifier = Modifier.padding(top = 8.dp))
-                        Button(
-                            onClick = { showNextBlockMenu = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(blocks.find { it.id == (block.params["nextBlock"]?.toIntOrNull() ?: -1)?.takeIf { it != -1 }}?.let { getBlockDisplayName(it, blocks) } ?: "Выберите блок")
-                        }
                     }
                     "If" -> {
                         Text("Условие:", modifier = Modifier.padding(top = 8.dp))
@@ -585,4 +649,44 @@ fun getBlockDisplayName(block: CodeBlock, allBlocks: List<CodeBlock>): String {
     } else {
         block.type
     }
+}
+
+
+
+fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
+    val startBlock = blocks.find { it.type == "Start" } ?: run {
+        appState.appendToConsole("Ошибка: нет блока Start!")
+        return
+    }
+
+    appState.clearConsole()
+    appState.appendToConsole("=== Запуск программы ===")
+
+    var currentBlock: CodeBlock? = startBlock
+    while (currentBlock != null) {
+        appState.appendToConsole(currentBlock.generateCode())
+
+        currentBlock = when (currentBlock.type) {
+            "Start", "Print", "Declare", "Set" -> {
+                blocks.find { it.id == currentBlock.params["nextBlock"]?.toIntOrNull() }
+            }
+            "If" -> {
+                // Логика для условного перехода
+                null // Временная заглушка
+            }
+            "End" -> null
+            else -> null
+        }
+    }
+
+    appState.appendToConsole("=== Программа завершена ===")
+}
+
+fun debugProgram(appState: AppState, blocks: List<CodeBlock>) {
+    appState.appendToConsole("=== Режим отладки ===")
+    executeProgram(appState, blocks) // Пока аналогично, можно расширить
+}
+
+fun stopProgram(appState: AppState) {
+    appState.appendToConsole("=== Программа остановлена ===")
 }
