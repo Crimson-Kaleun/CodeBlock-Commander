@@ -102,6 +102,7 @@ fun WorkPlace(navController: NavController) {
                                         type = type,
                                         x = 500f,
                                         y = 200f,
+                                        appState = appState,
                                         params = when (type) {
                                             "Start" -> mapOf("nextBlock" to "-1")
                                             "End" -> emptyMap()
@@ -163,7 +164,7 @@ fun WorkPlace(navController: NavController) {
                     modifier = Modifier
                         .verticalScroll(rememberScrollState())
                         .fillMaxWidth()
-                        .padding(start = 8.dp, end = 8.dp, top=8.dp, bottom = 28.dp),
+                        .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 28.dp),
                     color = Color.Black
                 )
             }
@@ -253,7 +254,7 @@ fun DraggableBlock(
 
     Box(
         modifier = Modifier
-            .offset(((offsetX)/d.density).dp, ((offsetY)/d.density).dp)
+            .offset(((offsetX) / d.density).dp, ((offsetY) / d.density).dp)
             .size(160.dp, 120.dp)
             .background(
                 color = when (block.type) {
@@ -375,6 +376,10 @@ fun BlockEditDialog(
     var rightExpr by remember { mutableStateOf(block.params["rightExpr"] ?: "") }
     var nextBlock by remember { mutableStateOf(block.params["nextBlock"] ?: "") }
 
+    var selectedType by remember { mutableStateOf(block.params["varType"] ?: "Int") }
+    var varType by remember { mutableStateOf("") }
+    var isVariableMode by remember { mutableStateOf(block.params["isVariable"]?.toBooleanStrict() ?: false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Редактировать ${block.type}") },
@@ -382,39 +387,121 @@ fun BlockEditDialog(
             Column {
                 when (block.type) {
                     "Print" -> {
-                        Text("Текст для вывода:")
-                        TextField(
-                            value = textValue,
-                            onValueChange = { textValue = it }
-                        )
+                        val declaredVars = blocks
+                            .filter { it.type == "Declare" }
+                            .mapNotNull { it.params["varName"] }
+                            .filter { it.isNotBlank() }
+                            .distinct()
 
-                        // Next block selector
-                        Text("Следующий блок:", modifier = Modifier.padding(top = 8.dp))
-                        Button(
-                            onClick = { showNextBlockMenu = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(blocks.find { it.id == (block.params["nextBlock"]?.toIntOrNull() ?: -1)?.takeIf { it != -1 }}?.let { getBlockDisplayName(it, blocks) } ?: "Выберите блок")
+                        var showVarMenu by remember { mutableStateOf(false) }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(
+                                selected = !isVariableMode,
+                                onClick = { isVariableMode = false }
+                            )
+                            Text("Текст")
+
+                            RadioButton(
+                                selected = isVariableMode,
+                                onClick = { isVariableMode = true }
+                            )
+                            Text("Переменная")
+                        }
+
+                        if (isVariableMode) {
+                            // Режим выбора переменной
+                            Text("Выберите переменную:")
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = textValue.ifEmpty { "Выберите переменную" },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showVarMenu = true }
+                                        .padding(8.dp)
+                                        .background(Color.LightGray)
+                                )
+
+                                DropdownMenu(
+                                    expanded = showVarMenu,
+                                    onDismissRequest = { showVarMenu = false }
+                                ) {
+                                    declaredVars.forEach { varName ->
+                                        DropdownMenuItem(
+                                            text = { Text(varName) },
+                                            onClick = {
+                                                textValue = varName
+                                                showVarMenu = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            // Режим ввода текста
+                            Text("Текст для вывода:")
+                            TextField(
+                                value = textValue,
+                                onValueChange = { textValue = it }
+                            )
                         }
                     }
                     "Declare" -> {
+                        val availableTypes = listOf("Int", "Double", "Boolean", "String")
+                        //var selectedType by remember { mutableStateOf(block.params["varType"] ?: "Int") }
+                        var showTypeMenu by remember { mutableStateOf(false) }
+
                         Text("Имя переменной:")
                         TextField(
                             value = varName,
                             onValueChange = { varName = it }
                         )
-                        Text("Значение:", modifier = Modifier.padding(top = 8.dp))
+
+                        Text("Тип переменной:", modifier = Modifier.padding(top = 8.dp))
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = selectedType,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showTypeMenu = true }
+                                    .padding(8.dp)
+                                    .background(Color.LightGray)
+                            )
+                            DropdownMenu(
+                                expanded = showTypeMenu,
+                                onDismissRequest = { showTypeMenu = false }
+                            ) {
+                                availableTypes.forEach { type ->
+                                    DropdownMenuItem(
+                                        text = { Text(type) },
+                                        onClick = {
+                                            selectedType = type
+                                            showTypeMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Text("Значение (опционально):", modifier = Modifier.padding(top = 8.dp))
                         TextField(
                             value = varValue,
                             onValueChange = { varValue = it }
                         )
 
-                        Text("Следующий блок:", modifier = Modifier.padding(top = 8.dp))
-                        Button(
-                            onClick = { showNextBlockMenu = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(blocks.find { it.id == (block.params["nextBlock"]?.toIntOrNull() ?: -1)?.takeIf { it != -1 }}?.let { getBlockDisplayName(it, blocks) } ?: "Выберите блок")
+                        // При сохранении
+                        Button(onClick = {
+                            //appState.addVariable(varName, selectedType, varValue.ifEmpty { null })
+                            onSave(mapOf(
+                                "varName" to varName,
+                                "varType" to selectedType,
+                                "varValue" to varValue,
+                                "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                            )
+                            )
+
+                        }) {
+                            Text("Сохранить")
                         }
                     }
                     "Set" -> {
@@ -604,6 +691,7 @@ fun BlockEditDialog(
                         )
                     }
                     "Declare" -> {
+                        //appState.addVariable(varName, selectedType, varValue.ifEmpty { null })
                         mapOf(
                             "varName" to varName,
                             "varValue" to varValue,
@@ -611,6 +699,25 @@ fun BlockEditDialog(
                         )
                     }
                     "Set" -> {
+
+                        try {
+                            val parsedValue = when (varType) {
+                                "Int" -> varValue.toInt()
+                                "Double" -> varValue.toDouble()
+                                "Boolean" -> varValue.toBoolean()
+                                else -> varValue
+                            }
+                            //appState.updateVariable(varName, parsedValue)
+                            onSave(mapOf(
+                                "varName" to varName,
+                                "varValue" to varValue,
+                                "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                            )
+                            )
+                        } catch (e: Exception) {
+                            appState.appendToConsole("Ошибка: неверный тип значения для $varName")
+                        }
+
                         mapOf(
                             "varName" to varName,
                             "varValue" to varValue,
@@ -654,6 +761,7 @@ fun getBlockDisplayName(block: CodeBlock, allBlocks: List<CodeBlock>): String {
 
 
 fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
+    appState.variables.clear()
     val startBlock = blocks.find { it.type == "Start" } ?: run {
         appState.appendToConsole("Ошибка: нет блока Start!")
         return
@@ -665,7 +773,8 @@ fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
     var currentBlock: CodeBlock? = startBlock
     while (currentBlock != null) {
         appState.appendToConsole(currentBlock.generateCode())
-
+        //appState.appendToConsole(currentBlock.execute())
+        currentBlock.execute()
         currentBlock = when (currentBlock.type) {
             "Start", "Print", "Declare", "Set" -> {
                 blocks.find { it.id == currentBlock.params["nextBlock"]?.toIntOrNull() }
@@ -678,7 +787,9 @@ fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
             else -> null
         }
     }
-
+    for (item in appState.variables) {
+        appState.appendToConsole("${item.key.toString()} ${item.value.second.toString()}")
+    }
     appState.appendToConsole("=== Программа завершена ===")
 }
 
@@ -690,3 +801,4 @@ fun debugProgram(appState: AppState, blocks: List<CodeBlock>) {
 fun stopProgram(appState: AppState) {
     appState.appendToConsole("=== Программа остановлена ===")
 }
+
