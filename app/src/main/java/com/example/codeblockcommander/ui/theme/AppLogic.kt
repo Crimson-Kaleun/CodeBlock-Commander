@@ -1,6 +1,11 @@
 package com.example.codeblockcommander.ui.theme
 import java.util.ArrayDeque
 
+fun Boolean.toInt() = if (this) 1 else 0
+fun Boolean.toDouble() = if (this) 1.0 else 0.0;
+fun Int.toBool() = if (this==0) false else true;
+fun Double.toBool() = if (this==0.0) false else true;
+
 fun Parser(expr: String): String{
     var expression = expr
     expression = expression.replace("\\.\\.+".toRegex(), ".")
@@ -23,7 +28,7 @@ fun Parser(expr: String): String{
 fun infixToPostfix(infix: String): String {
     val output = StringBuilder()
     val stack = ArrayDeque<Char>()
-    val precedence = mapOf('+' to 1, '-' to 1, '*' to 2, '/' to 2, '^' to 3, '~' to 4)
+    val precedence = mapOf('<' to 0, '>' to 0,'+' to 1, '-' to 1, '*' to 2, '/' to 2, '^' to 3, '~' to 4)
     var i = 0
 
     while (i < infix.length) {
@@ -51,7 +56,7 @@ fun infixToPostfix(infix: String): String {
             }
 
             //Унарный минус
-            token == '-' && (i == 0 || infix[i - 1] in "+-*/^(") -> {
+            token == '-' && (i == 0 || infix[i - 1] in "<>+-*/^(") -> {
                 //output.append("0 ")  // Для унарного минуса: "-x" → "0 x -"
                 stack.push('~')
             }
@@ -65,7 +70,7 @@ fun infixToPostfix(infix: String): String {
                 if (stack.isEmpty()) throw IllegalArgumentException("Несбалансированные скобки")
                 stack.pop()
             }
-            token in "+-*/^~" -> {
+            token in "<>+-*/^~" -> {
                 while (stack.isNotEmpty() && stack.peek() != '(' &&
                     (precedence[stack.peek()] ?: 0) >= (precedence[token] ?: 0)) {
                     output.append(stack.pop()).append(' ')
@@ -106,7 +111,7 @@ fun evaluatePostfix(postfix: String, variables: Map<String, Double> = emptyMap()
             }
 
             //Операторы
-            token in "+-*/^" -> {
+            token in "<>+-*/^" -> {
                 if (stack.size < 2) throw IllegalArgumentException("Недостаточно операндов для оператора '$token'")
                 val b = stack.pop()
                 val a = stack.pop()
@@ -116,6 +121,8 @@ fun evaluatePostfix(postfix: String, variables: Map<String, Double> = emptyMap()
                     "*" -> a * b
                     "/" -> if (b == 0.0) throw ArithmeticException("Деление на ноль") else a / b
                     "^" -> Math.pow(a, b)
+                    "<" -> ((a < b).toDouble())
+                    ">" -> ((a > b).toDouble())
                     else -> throw IllegalArgumentException("Неизвестный оператор: '$token'")
                 }
                 stack.push(result)
@@ -128,3 +135,12 @@ fun evaluatePostfix(postfix: String, variables: Map<String, Double> = emptyMap()
     if (stack.size != 1) throw IllegalArgumentException("Некорректное выражение")
     return stack.pop()
 }
+
+fun isCorrectName(NAME: String): Boolean
+{
+    if (NAME.length==0) return false;
+    if (NAME[0].isDigit()) return false;
+    return NAME.matches(Regex("[a-zA-Z0-9_$]+"));
+}
+
+

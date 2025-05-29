@@ -21,7 +21,12 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import com.example.codeblockcommander.ui.theme.isCorrectName
+import kotlin.math.roundToInt
 
 
 //import com.example.codeblockcommander.ui.theme.AppState
@@ -39,11 +44,20 @@ fun WorkPlace(navController: NavController) {
     var blocks by remember { mutableStateOf(emptyList<CodeBlock>()) }
     var draggedBlock by remember { mutableStateOf<CodeBlock?>(null) }
     var editedBlock by remember { mutableStateOf<CodeBlock?>(null) }
-    var nextBlock by remember { mutableStateOf<Int?>(null) }
 
     val blockTypes = listOf("Start", "End", "Print", "Declare", "If", "For", "Set", "Function")
 
     var isDarkTheme by remember { mutableStateOf(false) }
+
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+    var scale by remember { mutableStateOf(1f) }
+
+    val panGesture = rememberTransformableState { zoomChange, panChange, _ ->
+        scale *= zoomChange
+        offsetX += panChange.x
+        offsetY += panChange.y
+    }
 
     Scaffold(
         topBar = {
@@ -175,34 +189,48 @@ fun WorkPlace(navController: NavController) {
             .fillMaxSize()
             .padding(padding)
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                blocks.forEach { block ->
-                    val isDragged = draggedBlock?.id == block.id
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, _, _ ->
+                            offsetX += pan.x
+                            offsetY += pan.y
+                        }
+                    }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+                ) {
+                    blocks.forEach { block ->
+                        val isDragged = draggedBlock?.id == block.id
 
-                    DraggableBlock(
-                        block = block,
-                        isDragged = isDragged,
-                        blocks = blocks,
-                        onDragStart = { draggedBlock = block },
-                        onDragEnd = { draggedBlock = null },
-                        onEdit = { editedBlock = block },
-                        onPositionUpdate = { x, y ->
-                            blocks = blocks.map {
-                                if (it.id == block.id) it.copy(x = x, y = y) else it
-                            }
-                        },
-                        onNextBlockSelected = { blockId, nextBlockId ->
-                            blocks = blocks.map { b ->
-                                if (b.id == blockId) {
-                                    val newParams = b.params.toMutableMap()
-                                    newParams["nextBlock"] = nextBlockId.toString()
-                                    b.copy(params = newParams)
-                                } else {
-                                    b
+                        DraggableBlock(
+                            block = block,
+                            isDragged = isDragged,
+                            blocks = blocks,
+                            onDragStart = { draggedBlock = block },
+                            onDragEnd = { draggedBlock = null },
+                            onEdit = { editedBlock = block },
+                            onPositionUpdate = { x, y ->
+                                blocks = blocks.map {
+                                    if (it.id == block.id) it.copy(x = x, y = y) else it
+                                }
+                            },
+                            onNextBlockSelected = { blockId, nextBlockId ->
+                                blocks = blocks.map { b ->
+                                    if (b.id == blockId) {
+                                        val newParams = b.params.toMutableMap()
+                                        newParams["nextBlock"] = nextBlockId.toString()
+                                        b.copy(params = newParams)
+                                    } else {
+                                        b
+                                    }
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
 
@@ -234,7 +262,6 @@ fun WorkPlace(navController: NavController) {
         }
     }
 }
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DraggableBlock(
@@ -374,11 +401,12 @@ fun BlockEditDialog(
     var leftExpr by remember { mutableStateOf(block.params["leftExpr"] ?: "") }
     var condition by remember { mutableStateOf(block.params["condition"] ?: "==") }
     var rightExpr by remember { mutableStateOf(block.params["rightExpr"] ?: "") }
-    var nextBlock by remember { mutableStateOf(block.params["nextBlock"] ?: "") }
 
     var selectedType by remember { mutableStateOf(block.params["varType"] ?: "Int") }
     var varType by remember { mutableStateOf("") }
     var isVariableMode by remember { mutableStateOf(block.params["isVariable"]?.toBooleanStrict() ?: false) }
+
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -678,6 +706,9 @@ fun BlockEditDialog(
                         )
                     }
                 }
+                errorMessage?.let {
+                    Text(it, color = Color.Red)
+                }
             }
         },
         confirmButton = {
@@ -687,16 +718,26 @@ fun BlockEditDialog(
                         appState.appendToConsole("Вывод: $textValue")
                         mapOf(
                             "text" to textValue,
-                            "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                            "nextBlock" to (block.params["nextBlock"] ?: "-1"),
+                            "isVariable" to isVariableMode.toString()
                         )
                     }
                     "Declare" -> {
-                        //appState.addVariable(varName, selectedType, varValue.ifEmpty { null })
-                        mapOf(
-                            "varName" to varName,
-                            "varValue" to varValue,
-                            "nextBlock" to (block.params["nextBlock"] ?: "-1")
-                        )
+                        if(!isCorrectName(varName)){
+                            errorMessage = "Некорректное имя переменной"
+                            appState.appendToConsole("Ошибка: Некорректное название переменной!")
+                            return@Button
+                        }
+                        else {
+                            //appState.addVariable(varName, selectedType, varValue.ifEmpty { null })
+                            mapOf(
+                                //mutableStateOf(block.params["varType"]
+                                "varType" to selectedType,
+                                "varName" to varName,
+                                "varValue" to varValue,
+                                "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                            )
+                        }
                     }
                     "Set" -> {
 
@@ -736,6 +777,7 @@ fun BlockEditDialog(
                     }
                     else -> block.params
                 }
+                errorMessage = null
                 onSave(newParams)
             }) {
                 Text("Сохранить")
@@ -772,7 +814,7 @@ fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
 
     var currentBlock: CodeBlock? = startBlock
     while (currentBlock != null) {
-        appState.appendToConsole(currentBlock.generateCode())
+        //appState.appendToConsole(currentBlock.generateCode())
         //appState.appendToConsole(currentBlock.execute())
         currentBlock.execute()
         currentBlock = when (currentBlock.type) {
@@ -787,9 +829,16 @@ fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
             else -> null
         }
     }
+    appState.appendToConsole("=== ===")
     for (item in appState.variables) {
         appState.appendToConsole("${item.key.toString()} ${item.value.second.toString()}")
     }
+    appState.appendToConsole("=== ===")
+    for (item in blocks) {
+        appState.appendToConsole(item.generateCode())
+    }
+    appState.appendToConsole("=== ===")
+
     appState.appendToConsole("=== Программа завершена ===")
 }
 
@@ -800,5 +849,29 @@ fun debugProgram(appState: AppState, blocks: List<CodeBlock>) {
 
 fun stopProgram(appState: AppState) {
     appState.appendToConsole("=== Программа остановлена ===")
+}
+
+@Composable
+fun ControlsPanel(
+    onZoomIn: () -> Unit,
+    onZoomOut: () -> Unit,
+    onResetView: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .padding(16.dp)
+            .background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+            .padding(8.dp)
+    ) {
+        IconButton(onClick = onZoomIn) {
+            Icon(Icons.Default.Add, "Увеличить")
+        }
+        IconButton(onClick = onZoomOut) {
+            //Icon(Icons.Default.Remove, "Уменьшить")
+        }
+        IconButton(onClick = onResetView) {
+            Icon(Icons.Default.Refresh, "Сбросить вид")
+        }
+    }
 }
 

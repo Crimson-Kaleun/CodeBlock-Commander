@@ -34,7 +34,7 @@ class AppState {
             "String" -> ""
             else -> null
         }
-        variables[name] = type to actualValue
+        variables[name] = type to Parser(actualValue.toString())
     }
 
     // Обновление значения переменной
@@ -52,6 +52,24 @@ class AppState {
 
 }
 
+class ExecutionContext(
+    val parent: ExecutionContext? = null,
+    val variables: MutableMap<String, Pair<String, Any?>> = mutableMapOf()
+) {
+    fun getVariable(name: String): Any? {
+        return variables[name]?.second ?: parent?.getVariable(name)
+    }
+
+    fun setVariable(name: String, type: String, value: Any?) {
+        if (variables.containsKey(name) || parent == null) {
+            variables[name] = type to value
+        } else {
+            parent.setVariable(name, type, value)
+        }
+    }
+}
+
+
 data class BlockConnection(
     val fromBlockId: Int,
     val fromSide: ConnectionSide,
@@ -68,6 +86,7 @@ data class CodeBlock(
     val y: Float,
     val params: Map<String, String> = emptyMap(),
     val connections: List<BlockConnection> = emptyList(),
+    val childBlocks: MutableMap<String, List<CodeBlock>> = mutableMapOf(),
     val appState: AppState
 ) {
     fun generateCode(): String {
@@ -85,28 +104,40 @@ data class CodeBlock(
 
     fun execute() {
         //return "${this.x} ${this.y} ${this.type}\n"
-        when(type){
+        when(type) {
             "Start" -> {
 
             }
+
             "Declare" -> {
                 appState.addVariable(params["varName"].toString(), type, params["varValue"])
             }
+
             "Set" -> {
-                if(appState.variables.containsKey(params["varName"].toString())) {
+                if (appState.variables.containsKey(params["varName"].toString())) {
                     appState.updateVariable(
                         params["varName"].toString(),
                         params["varValue"].toString()
                     )
-                }
-                else {
+                } else {
                     appState.appendToConsole("Переменной ${params["varName"]} не существует")
                 }
             }
+            "Print" -> {
+                if (params["isVariable"]?.toBooleanStrict() == true) {
+                    //appState.appendToConsole(params["text"].toString())
+                    if (appState.variables.containsKey(params["text"].toString())) {
+                        appState.appendToConsole(appState.variables[params["text"].toString()]?.second.toString())
+                    }
+                }
+                else {
+                    appState.appendToConsole("${params["text"]}")
+                }
+            }
+
         }
 
     }
-
 
 }
 
