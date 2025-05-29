@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import com.example.codeblockcommander.ui.theme.Parser
 import com.example.codeblockcommander.ui.theme.isCorrectName
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -412,6 +413,7 @@ fun BlockEditDialog(
     var showTrueBlockMenu by remember { mutableStateOf(false) }
     var showFalseBlockMenu by remember { mutableStateOf(false) }
 
+    // Локальные состояния для редактируемых полей
     var textValue by remember { mutableStateOf(block.params["text"] ?: "") }
     var varName by remember { mutableStateOf(block.params["varName"] ?: "") }
     var varValue by remember { mutableStateOf(block.params["varValue"] ?: "") }
@@ -837,8 +839,16 @@ fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
                 blocks.find { it.id == currentBlock.params["nextBlock"]?.toIntOrNull() }
             }
             "If" -> {
+                val expr = Parser(currentBlock.generateCode())
+                appState.appendToConsole(currentBlock.generateCode())
+                appState.appendToConsole(expr)
 
-                null
+                if (expr.toDouble() == 1.0){
+                    blocks.find { it.id == currentBlock.params["trueBlock"]?.toIntOrNull() }
+                }
+                else {
+                    blocks.find { it.id == currentBlock.params["falseBlock"]?.toIntOrNull() }
+                }
             }
             "End" -> null
             else -> null

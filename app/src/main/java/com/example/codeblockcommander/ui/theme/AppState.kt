@@ -96,7 +96,7 @@ data class CodeBlock(
             "Print" -> "println(\"${params["text"]}\")"
             "Declare" -> "var ${params["varName"]} = ${params["varValue"]}"
             "Set" -> "${params["varName"]} = ${params["varValue"]}"
-            "If" -> "if (${params["leftExpr"]} ${params["condition"]} ${params["rightExpr"]}) { ... }"
+            "If" -> "${params["leftExpr"]} ${params["condition"]} ${params["rightExpr"]}"
             else -> "// $type блок"
         }
     }
