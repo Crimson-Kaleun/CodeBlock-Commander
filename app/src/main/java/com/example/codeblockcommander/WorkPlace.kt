@@ -1,3 +1,4 @@
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
@@ -23,15 +24,30 @@ import androidx.navigation.NavController
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.PaintingStyle.Companion.Stroke
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import com.example.codeblockcommander.ui.theme.isCorrectName
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 
 //import com.example.codeblockcommander.ui.theme.AppState
 //import com.example.codeblockcommander.ui.theme.rememberAppState
 
+@Composable
+fun Float.toDp(): Dp = with(LocalDensity.current) { this@toDp.toDp() }
+@Composable
+fun Dp.toPx(): Float = with(LocalDensity.current) { this@toPx.toPx() }
 
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -199,6 +215,7 @@ fun WorkPlace(navController: NavController) {
                         }
                     }
             ) {
+                DrawConnections(blocks, offsetX, offsetY)
                 Box(
                     modifier = Modifier
                         .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
@@ -281,7 +298,8 @@ fun DraggableBlock(
 
     Box(
         modifier = Modifier
-            .offset(((offsetX) / d.density).dp, ((offsetY) / d.density).dp)
+            //.offset(((offsetX) / d.density).dp, ((offsetY) / d.density).dp)
+            .offset(offsetX.toDp(), offsetY.toDp())
             .size(160.dp, 120.dp)
             .background(
                 color = when (block.type) {
@@ -304,10 +322,10 @@ fun DraggableBlock(
                         change.consume()
                         offsetX += dragAmount.x
                         offsetY += dragAmount.y
-                        onPositionUpdate(block.x + offsetX, block.y + offsetY)
+                        onPositionUpdate(offsetX, offsetY)
                     },
                     onDragEnd = {
-                        onPositionUpdate(block.x + offsetX, block.y + offsetY)
+                        //onPositionUpdate(block.x, block.y)
                         onDragEnd()
                     }
                 )
@@ -394,7 +412,6 @@ fun BlockEditDialog(
     var showTrueBlockMenu by remember { mutableStateOf(false) }
     var showFalseBlockMenu by remember { mutableStateOf(false) }
 
-    // Локальные состояния для редактируемых полей
     var textValue by remember { mutableStateOf(block.params["text"] ?: "") }
     var varName by remember { mutableStateOf(block.params["varName"] ?: "") }
     var varValue by remember { mutableStateOf(block.params["varValue"] ?: "") }
@@ -476,7 +493,6 @@ fun BlockEditDialog(
                     }
                     "Declare" -> {
                         val availableTypes = listOf("Int", "Double", "Boolean", "String")
-                        //var selectedType by remember { mutableStateOf(block.params["varType"] ?: "Int") }
                         var showTypeMenu by remember { mutableStateOf(false) }
 
                         Text("Имя переменной:")
@@ -517,7 +533,6 @@ fun BlockEditDialog(
                             onValueChange = { varValue = it }
                         )
 
-                        // При сохранении
                         Button(onClick = {
                             //appState.addVariable(varName, selectedType, varValue.ifEmpty { null })
                             onSave(mapOf(
@@ -822,8 +837,8 @@ fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
                 blocks.find { it.id == currentBlock.params["nextBlock"]?.toIntOrNull() }
             }
             "If" -> {
-                // Логика для условного перехода
-                null // Временная заглушка
+
+                null
             }
             "End" -> null
             else -> null
@@ -875,3 +890,116 @@ fun ControlsPanel(
     }
 }
 
+
+@Composable
+fun DrawConnections(blocks: List<CodeBlock>, offsetX: Float, offsetY: Float) {
+    val density = LocalDensity.current
+    val path = remember { Path() }
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        blocks.forEach { block ->
+            if (block.type != "If") {
+                val nextBlockId = block.params["nextBlock"]?.toIntOrNull() ?: -1
+                if (nextBlockId != -1) {
+                    drawConnection(
+                        block = block,
+                        nextBlockId = nextBlockId,
+                        blocks = blocks,
+                        offsetX = offsetX,
+                        offsetY = offsetY,
+                        startYOffset = 60.dp,
+                        color = Color(0xFF448AFF)
+                    )
+                }
+            } else {
+                //If block
+                val trueBlockId = block.params["trueBlock"]?.toIntOrNull() ?: -1
+                val falseBlockId = block.params["falseBlock"]?.toIntOrNull() ?: -1
+
+                //True
+                if (trueBlockId != -1) {
+                    drawConnection(
+                        block = block,
+                        nextBlockId = trueBlockId,
+                        blocks = blocks,
+                        offsetX = offsetX,
+                        offsetY = offsetY,
+                        startYOffset = 40.dp,
+                        color = Color(0xFF4CAF50)
+                    )
+                }
+
+                //False
+                if (falseBlockId != -1) {
+                    drawConnection(
+                        block = block,
+                        nextBlockId = falseBlockId,
+                        blocks = blocks,
+                        offsetX = offsetX,
+                        offsetY = offsetY,
+                        startYOffset = 80.dp,
+                        color = Color(0xFFF44336)
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawConnection(
+    block: CodeBlock,
+    nextBlockId: Int,
+    blocks: List<CodeBlock>,
+    offsetX: Float,
+    offsetY: Float,
+    startYOffset: Dp,
+    color: Color
+) {
+    val nextBlock = blocks.find { it.id == nextBlockId } ?: return
+    val path = Path()
+
+    val startX = block.x + 160.dp.toPx()
+    val startY = block.y + startYOffset.toPx()
+
+    val endX = nextBlock.x
+    val endY = nextBlock.y + 60.dp.toPx()
+
+    val controlX1 = startX + 100f
+    val controlY1 = startY
+    val controlX2 = endX - 100f
+    val controlY2 = endY
+
+    path.reset()
+    path.moveTo(startX + offsetX, startY + offsetY)
+    path.cubicTo(
+        controlX1 + offsetX, controlY1 + offsetY,
+        controlX2 + offsetX, controlY2 + offsetY,
+        endX + offsetX, endY + offsetY
+    )
+
+    val angle = atan2(endY - startY, endX - startX)
+    val arrowSize = 10.dp.toPx()
+    val arrowX1 = endX + offsetX - arrowSize * cos(angle - PI / 6)
+    val arrowY1 = endY + offsetY - arrowSize * sin(angle - PI / 6)
+    val arrowX2 = endX + offsetX - arrowSize * cos(angle + PI / 6)
+    val arrowY2 = endY + offsetY - arrowSize * sin(angle + PI / 6)
+
+    drawPath(
+        path = path,
+        color = color,
+        style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+    )
+
+    drawLine(
+        color = color,
+        start = Offset(endX + offsetX, endY + offsetY),
+        end = Offset(arrowX1.toFloat(), arrowY1.toFloat()),
+        strokeWidth = 2.dp.toPx()
+    )
+    drawLine(
+        color = color,
+        start = Offset(endX + offsetX, endY + offsetY),
+        end = Offset(arrowX2.toFloat(), arrowY2.toFloat()),
+        strokeWidth = 2.dp.toPx()
+    )
+}
