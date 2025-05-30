@@ -60,6 +60,39 @@ class AppState {
         return variables[name]?.first
     }
 
+
+    val arrays = mutableMapOf<String, Pair<String, Array<Any?>>>()
+
+    // Добавление массива
+    fun addArray(name: String, type: String, size: Int) {
+        val initialValue = when (type) {
+            "Int" -> 0
+            "Double" -> 0.0
+            "Boolean" -> false
+            "String" -> ""
+            else -> null
+        }
+        arrays[name] = type to Array(size) { 0 }
+    }
+
+    // Установка элемента массива
+    fun setArrayElement(name: String, index: Int, value: Any) {
+        arrays[name]?.let { (type, array) ->
+            when (type) {
+                "Int" -> array[index] = value.toString().toInt()
+                "Double" -> array[index] = value.toString().toDouble()
+                "Boolean" -> array[index] = value.toString().toBoolean()
+                else -> array[index] = value
+            }
+        }
+    }
+
+    // Получение элемента массива
+    fun getArrayElement(name: String, index: Int): Any? {
+        return arrays[name]?.second?.getOrNull(index)
+    }
+
+
 }
 
 class ExecutionContext(
@@ -103,9 +136,14 @@ data class CodeBlock(
         return when (type) {
             "Start" -> "// Начало программы"
             "End" -> "// Конец программы"
-            "Print" -> "println(\"${params["text"]}\")"
-            "Declare" -> "var ${params["varName"]} = ${params["varValue"]}"
-            "Set" -> "${params["varName"]} = ${params["varValue"]}"
+            "Print Var" -> "println(\"${params["text"]}\")"
+            "Declare Var" -> "var ${params["varName"]} = ${params["varValue"]}"
+            "Set Var" -> "${params["varName"]} = ${params["varValue"]}"
+
+            "Declare Array" -> "val ${params["arrayName"]} = Array<${params["varType"]}>(${params["arraySize"]})"
+            "Set Array" -> "${params["arrayName"]}[${params["arrayId"]}] = ${params["arrayValue"]}"
+            "Print Array" -> "println(${params["text"]}.contentToString())"
+
             "If" -> "${params["leftExpr"]} ${params["condition"]} ${params["rightExpr"]}"
             else -> "// $type блок"
         }
@@ -119,11 +157,11 @@ data class CodeBlock(
 
             }
 
-            "Declare" -> {
+            "Declare Var" -> {
                 appState.addVariable(params["varName"].toString(), type, params["varValue"])
             }
 
-            "Set" -> {
+            "Set Var" -> {
                 if (appState.variables.containsKey(params["varName"].toString())) {
                     appState.updateVariable(
                         params["varName"].toString(),
@@ -133,7 +171,7 @@ data class CodeBlock(
                     appState.appendToConsole("Переменной ${params["varName"]} не существует")
                 }
             }
-            "Print" -> {
+            "Print Var" -> {
                 if (params["isVariable"]?.toBooleanStrict() == true) {
                     //appState.appendToConsole(params["text"].toString())
                     if (appState.variables.containsKey(params["text"].toString())) {
@@ -143,6 +181,27 @@ data class CodeBlock(
                 else {
                     appState.appendToConsole("${params["text"]}")
                 }
+            }
+
+            "Declare Array" -> {
+                val name = params["arrayName"] ?: ""
+                val type = params["varType"] ?: "Int"
+                val size = params["arraySize"]?.toIntOrNull() ?: 0
+                appState.addArray(name, type, size)
+            }
+
+            "Set Array" -> {
+                val name = params["arrayName"] ?: ""
+                val index = params["arrayId"]?.toIntOrNull() ?: 0
+                val value = params["arrayValue"] ?: ""
+                appState.setArrayElement(name, index, value)
+            }
+
+            "Print Array" -> {
+                val name = params["arrayName"] ?: ""
+                val array = appState.arrays[name]?.second
+                //appState.appendToConsole("$name: ${array?.contentToString()}")
+                appState.appendToConsole("${array.toString()}")
             }
 
         }

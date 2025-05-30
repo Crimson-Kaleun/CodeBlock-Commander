@@ -60,18 +60,20 @@ fun WorkPlace(navController: NavController) {
     val appState = rememberAppState()
 
     var showBlockMenu by remember { mutableStateOf(false) }
+    var showSubMenu by remember { mutableStateOf<BlockCategory?>(null) }
     var showSettingsMenu by remember { mutableStateOf(false) }
     var blocks by remember { mutableStateOf(emptyList<CodeBlock>()) }
     var draggedBlock by remember { mutableStateOf<CodeBlock?>(null) }
     var editedBlock by remember { mutableStateOf<CodeBlock?>(null) }
 
-    val blockTypes = listOf("Start", "End", "Print", "Declare", "If", "For", "Set", "Function")
+    //val blockTypes = listOf("Start", "End", "Print", "Declare", "If", "For", "Set", "Function")
 
     var isDarkTheme by remember { mutableStateOf(false) }
 
     var offsetX by remember { mutableStateOf(0f) }
     var offsetY by remember { mutableStateOf(0f) }
     var scale by remember { mutableStateOf(1f) }
+
 
     val panGesture = rememberTransformableState { zoomChange, panChange, _ ->
         scale *= zoomChange
@@ -135,45 +137,114 @@ fun WorkPlace(navController: NavController) {
                         Icon(Icons.Default.MoreVert, "Настройки")
                     }
 
-                    DropdownMenu(expanded = showBlockMenu, onDismissRequest = { showBlockMenu = false }) {
-                        blockTypes.forEach { type ->
+                    DropdownMenu(
+                        expanded = showBlockMenu,
+                        onDismissRequest = { showBlockMenu = false }
+                    ) {
+                        blockCategories.forEach { category ->
                             DropdownMenuItem(
-                                text = { Text(type) },
-                                onClick = {
-                                    if (type == "Start" && blocks.any { it.type == "Start" }) {
-                                        appState.appendToConsole("Ошибка: блок Start уже существует!")
-                                        return@DropdownMenuItem
-                                    }
-                                    if (type == "End" && blocks.any { it.type == "End" }) {
-                                        appState.appendToConsole("Ошибка: блок End уже существует!")
-                                        return@DropdownMenuItem
-                                    }
-                                    blocks = blocks + CodeBlock(
-                                        id = System.currentTimeMillis().toInt(),
-                                        type = type,
-                                        x = 500f,
-                                        y = 200f,
-                                        appState = appState,
-                                        params = when (type) {
-                                            "Start" -> mapOf("nextBlock" to "-1")
-                                            "End" -> emptyMap()
-                                            "Print" -> mapOf("text" to "Hello", "nextBlock" to "-1")
-                                            "Declare" -> mapOf("varName" to "", "varValue" to "", "nextBlock" to "-1")
-                                            "Set" -> mapOf("varName" to "", "varValue" to "", "nextBlock" to "-1")
-                                            "If" -> mapOf(
-                                                "leftExpr" to "",
-                                                "condition" to "==",
-                                                "rightExpr" to "",
-                                                "trueBlock" to "-1",
-                                                "falseBlock" to "-1",
-                                                "nextBlock" to "-1"
-                                            )
-                                            else -> mapOf("nextBlock" to "-1")
+                                text = {
+                                    Text(
+                                        when (category) {
+                                            is BlockCategory.Core -> "Основные блоки"
+                                            is BlockCategory.Variables -> "Переменные"
+                                            is BlockCategory.Arrays -> "Массивы"
                                         }
                                     )
+                                },
+                                onClick = {
+                                    showSubMenu = category
                                     showBlockMenu = false
                                 }
                             )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = showSubMenu != null,
+                        onDismissRequest = { showSubMenu = null }
+                    ) {
+                        showSubMenu?.let { category ->
+                            blockSubTypes[category]?.forEach { type ->
+                                DropdownMenuItem(
+                                    text = { Text(type) },
+                                    onClick = {
+                                        if ((type == "Start" || type == "End") &&
+                                            blocks.any { it.type == type }) {
+                                            appState.appendToConsole("Ошибка: блок $type уже существует!")
+                                        } else {
+                                            val newBlock = when (type) {
+                                                "Declare Var" -> CodeBlock(
+                                                    id = System.currentTimeMillis().toInt(),
+                                                    type = type,
+                                                    x = 500f,
+                                                    y = 200f,
+                                                    appState = appState,
+                                                    params = mapOf(
+                                                        "varName" to "",
+                                                        "varType" to "Int",
+                                                        "varValue" to "",
+                                                        "nextBlock" to "-1",
+                                                    )
+                                                )
+                                                "Set Var" -> CodeBlock(
+                                                    id = System.currentTimeMillis().toInt(),
+                                                    type = type,
+                                                    x = 500f,
+                                                    y = 200f,
+                                                    appState = appState,
+                                                    params = mapOf(
+                                                        "varName" to "",
+                                                        "varValue" to "",
+                                                        "nextBlock" to "-1",
+                                                    )
+                                                )
+                                                "Declare Array" -> CodeBlock(
+                                                    id = System.currentTimeMillis().toInt(),
+                                                    type = type,
+                                                    x = 500f,
+                                                    y = 200f,
+                                                    appState = appState,
+                                                    params = mapOf(
+                                                        "arrayName" to "",
+                                                        "varType" to "Int",
+                                                        "arrayValue" to "",
+                                                        "arrayId" to "",
+                                                        "arraySize" to "",
+                                                        "nextBlock" to "-1",
+                                                    )
+                                                )
+                                                "Set Array" -> CodeBlock(
+                                                    id = System.currentTimeMillis().toInt(),
+                                                    type = type,
+                                                    x = 500f,
+                                                    y = 200f,
+                                                    appState = appState,
+                                                    params = mapOf(
+                                                        "arrayName" to "",
+                                                        "arrayValue" to "",
+                                                        "arrayId" to "",
+                                                        "nextBlock" to "-1",
+                                                    )
+                                                )
+
+
+
+                                                else -> CodeBlock(
+                                                    id = System.currentTimeMillis().toInt(),
+                                                    type = type,
+                                                    x = 500f,
+                                                    y = 200f,
+                                                    appState = appState,
+                                                    params = mapOf("nextBlock" to "-1")
+                                                )
+                                            }
+                                            blocks = blocks + newBlock
+                                        }
+                                        showSubMenu = null
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -334,8 +405,9 @@ fun DraggableBlock(
             .size(160.dp, 120.dp)
             .background(
                 color = when (block.type) {
-                    "Print" -> Color(0xFF4CAF50)
-                    "Declare" -> Color(0xFF009688)
+                    "Print Var" -> Color(0xFF4CAF50)
+                    "Declare Var" -> Color(0xFF009688)
+                    "Set Var" -> Color(0xFF112A28)
                     "If" -> Color(0xFF2196F3)
                     "For" -> Color(0xFFFFC107)
                     else -> Color(0xFF9C27B0)
@@ -374,10 +446,15 @@ fun DraggableBlock(
             // Display
 
             when (block.type) {
-                "Print" -> Text(block.params["text"] ?: "", color = Color.White, fontSize = 12.sp)
-                "Declare" -> Text("${block.params["varName"]} = ${block.params["varValue"]}",
+                "Print Var" -> Text(block.params["text"] ?: "", color = Color.White, fontSize = 12.sp)
+                "Declare Var" -> Text("${block.params["varName"]} = ${block.params["varValue"]}",
                     color = Color.White, fontSize = 12.sp)
-                "Set" -> Text("${block.params["varName"]} = ${block.params["varValue"]}",
+                "Set Var" -> Text("${block.params["varName"]} = ${block.params["varValue"]}",
+                    color = Color.White, fontSize = 12.sp)
+                "Print Array" -> Text(block.params["text"] ?: "", color = Color.White, fontSize = 12.sp)
+                "Declare Array" -> Text("${block.params["arrayName"]}<${block.params["varType"]}>(${block.params["arraySize"]})",
+                    color = Color.White, fontSize = 12.sp)
+                "Set Array" -> Text("${block.params["arrayName"]}[${block.params["arrayId"]}]= ${block.params["arrayValue"]}",
                     color = Color.White, fontSize = 12.sp)
                 "If" -> Text("${block.params["leftExpr"]} ${block.params["condition"]} ${block.params["rightExpr"]}",
                     color = Color.White, fontSize = 12.sp)
@@ -444,9 +521,13 @@ fun BlockEditDialog(
     var showTrueBlockMenu by remember { mutableStateOf(false) }
     var showFalseBlockMenu by remember { mutableStateOf(false) }
 
-    // Локальные состояния для редактируемых полей
     var textValue by remember { mutableStateOf(block.params["text"] ?: "") }
     var varName by remember { mutableStateOf(block.params["varName"] ?: "") }
+    var arrayName by remember { mutableStateOf(block.params["arrayName"] ?: "") }
+    var arrayId by remember { mutableStateOf(block.params["arrayId"] ?: "") }
+    var arrayValue by remember { mutableStateOf(block.params["arrayValue"] ?: "") }
+    var arraySize by remember { mutableStateOf(block.params["arraySize"] ?: "5") }
+
     var varValue by remember { mutableStateOf(block.params["varValue"] ?: "") }
     var leftExpr by remember { mutableStateOf(block.params["leftExpr"] ?: "") }
     var condition by remember { mutableStateOf(block.params["condition"] ?: "==") }
@@ -464,9 +545,9 @@ fun BlockEditDialog(
         text = {
             Column {
                 when (block.type) {
-                    "Print" -> {
+                    "Print Var" -> {
                         val declaredVars = blocks
-                            .filter { it.type == "Declare" }
+                            .filter { it.type == "Declare Var" }
                             .mapNotNull { it.params["varName"] }
                             .filter { it.isNotBlank() }
                             .distinct()
@@ -488,7 +569,6 @@ fun BlockEditDialog(
                         }
 
                         if (isVariableMode) {
-                            // Режим выбора переменной
                             Text("Выберите переменную:")
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 Text(
@@ -516,7 +596,6 @@ fun BlockEditDialog(
                                 }
                             }
                         } else {
-                            // Режим ввода текста
                             Text("Текст для вывода:")
                             TextField(
                                 value = textValue,
@@ -524,7 +603,7 @@ fun BlockEditDialog(
                             )
                         }
                     }
-                    "Declare" -> {
+                    "Declare Var" -> {
                         val availableTypes = listOf("Int", "Double", "Boolean", "String")
                         var showTypeMenu by remember { mutableStateOf(false) }
 
@@ -565,25 +644,11 @@ fun BlockEditDialog(
                             value = varValue,
                             onValueChange = { varValue = it }
                         )
-                        /*
-                        Button(onClick = {
-                            //appState.addVariable(varName, selectedType, varValue.ifEmpty { null })
-                            onSave(mapOf(
-                                "varName" to varName,
-                                "varType" to selectedType,
-                                "varValue" to varValue,
-                                "nextBlock" to (block.params["nextBlock"] ?: "-1")
-                            )
-                            )
 
-                        }) {
-                            Text("Сохранить")
-                        }
-                        */
                     }
-                    "Set" -> {
+                    "Set Var" -> {
                         val declaredVars = blocks
-                            .filter { it.type == "Declare" }
+                            .filter { it.type == "Declare Var" }
                             .mapNotNull { it.params["varName"] }
                             .filter { it.isNotBlank() }
                             .distinct()
@@ -623,6 +688,146 @@ fun BlockEditDialog(
                             onValueChange = { varValue = it }
                         )
                     }
+
+                    "Declare Array" -> {
+
+                        val availableTypes = listOf("Int", "Double", "Boolean", "String")
+                        var showTypeMenu by remember { mutableStateOf(false) }
+
+                        Text("Имя переменной:")
+                        TextField(
+                            value = arrayName,
+                            onValueChange = { arrayName = it }
+                        )
+
+                        Text("Тип Массива:", modifier = Modifier.padding(top = 8.dp))
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = selectedType,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showTypeMenu = true }
+                                    .padding(8.dp)
+                                    .background(Color.LightGray)
+                            )
+                            DropdownMenu(
+                                expanded = showTypeMenu,
+                                onDismissRequest = { showTypeMenu = false }
+                            ) {
+                                availableTypes.forEach { type ->
+                                    DropdownMenuItem(
+                                        text = { Text(type) },
+                                        onClick = {
+                                            selectedType = type
+                                            showTypeMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Text("Размер массива:", modifier = Modifier.padding(top = 8.dp))
+                        TextField(
+                            value = arraySize,
+                            onValueChange = { if (it.all { c -> c.isDigit() }) arraySize = it }
+                        )
+
+                        Text("Значение элементов(опционально):", modifier = Modifier.padding(top = 8.dp))
+                        TextField(
+                            value = arrayValue,
+                            onValueChange = { arrayValue = it }
+                        )
+
+                    }
+
+
+                    "Set Array" -> {
+                        val declaredVars = blocks
+                            .filter { it.type == "Declare Array" }
+                            .mapNotNull { it.params["arrayName"] }
+                            .filter { it.isNotBlank() }
+                            .distinct()
+
+                        var showVarMenu by remember { mutableStateOf(false) }
+
+                        Text("Выберите массив:")
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = arrayName.ifEmpty { "Выберите массив" },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showVarMenu = true }
+                                    .padding(8.dp)
+                                    .background(Color.LightGray)
+                            )
+
+                            DropdownMenu(
+                                expanded = showVarMenu,
+                                onDismissRequest = { showVarMenu = false }
+                            ) {
+                                declaredVars.forEach { _arrayValue ->
+                                    DropdownMenuItem(
+                                        text = { Text(_arrayValue) },
+                                        onClick = {
+                                            arrayName = _arrayValue
+                                            showVarMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Text("Номер элемента:", modifier = Modifier.padding(top = 8.dp))
+                        TextField(
+                            value = arrayId,
+                            onValueChange = { arrayId = it }
+                        )
+
+                        Text("Значение:", modifier = Modifier.padding(top = 8.dp))
+                        TextField(
+                            value = arrayValue,
+                            onValueChange = { arrayValue = it }
+                        )
+                    }
+
+
+                    "Print Array" -> {
+                        val declaredVars = blocks
+                            .filter { it.type == "Declare Array" }
+                            .mapNotNull { it.params["arrayName"] }
+                            .filter { it.isNotBlank() }
+                            .distinct()
+
+                        var showVarMenu by remember { mutableStateOf(false) }
+
+                        Text("Выберите массив:")
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = textValue.ifEmpty { "Выберите массив" },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showVarMenu = true }
+                                    .padding(8.dp)
+                                    .background(Color.LightGray)
+                            )
+
+                            DropdownMenu(
+                                expanded = showVarMenu,
+                                onDismissRequest = { showVarMenu = false }
+                            ) {
+                                declaredVars.forEach { _textValue ->
+                                    DropdownMenuItem(
+                                        text = { Text(_textValue) },
+                                        onClick = {
+                                            textValue = _textValue
+                                            showVarMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     "If" -> {
                         Text("Условие:", modifier = Modifier.padding(top = 8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -757,7 +962,7 @@ fun BlockEditDialog(
         confirmButton = {
             Button(onClick = {
                 val newParams = when (block.type) {
-                    "Print" -> {
+                    "Print Var" -> {
                         appState.appendToConsole("Вывод: $textValue")
                         mapOf(
                             "text" to textValue,
@@ -765,7 +970,7 @@ fun BlockEditDialog(
                             "isVariable" to isVariableMode.toString()
                         )
                     }
-                    "Declare" -> {
+                    "Declare Var" -> {
                         if(!isCorrectName(varName)){
                             errorMessage = "Некорректное имя переменной"
                             appState.appendToConsole("Ошибка: Некорректное название переменной!")
@@ -782,7 +987,7 @@ fun BlockEditDialog(
                             )
                         }
                     }
-                    "Set" -> {
+                    "Set Var" -> {
 
                         try {
                             val parsedValue = when (varType) {
@@ -818,6 +1023,63 @@ fun BlockEditDialog(
                             "nextBlock" to (block.params["nextBlock"] ?: "-1")
                         )
                     }
+
+
+
+                    "Print Array" -> {
+                        appState.appendToConsole("Вывод: $textValue")
+                        mapOf(
+                            "text" to textValue,
+                            "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                        )
+                    }
+                    "Declare Array" -> {
+                        if(!isCorrectName(arrayName)){
+                            errorMessage = "Некорректное имя переменной"
+                            appState.appendToConsole("Ошибка: Некорректное название переменной!")
+                            return@Button
+                        }
+                        else {
+                            //appState.addVariable(varName, selectedType, varValue.ifEmpty { null })
+                            mapOf(
+                                //mutableStateOf(block.params["varType"]
+                                "varType" to selectedType,
+                                "arrayName" to arrayName,
+                                "arrayValue" to arrayValue,
+                                "arraySize" to arraySize,
+                                "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                            )
+                        }
+                    }
+
+                    "Set Array" -> {
+                        try {
+                            val parsedValue = when (varType) {
+                                "Int" -> arrayValue.toInt()
+                                "Double" -> arrayValue.toDouble()
+                                "Boolean" -> arrayValue.toBoolean()
+                                else -> arrayValue
+                            }
+                            onSave(mapOf(
+                                "arrayName" to arrayName,
+                                "arrayID" to arrayId,
+                                "arrayValue" to arrayValue,
+                                "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                            )
+                            )
+                        } catch (e: Exception) {
+                            appState.appendToConsole("Ошибка: неверный тип значения для $arrayName")
+                        }
+
+                        mapOf(
+                            "arrayName" to arrayName,
+                            "arrayId" to arrayId,
+                            "arrayValue" to arrayValue,
+                            "nextBlock" to (block.params["nextBlock"] ?: "-1")
+                        )
+                    }
+
+
                     else -> block.params
                 }
                 errorMessage = null
@@ -861,7 +1123,7 @@ fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
         //appState.appendToConsole(currentBlock.execute())
         currentBlock.execute()
         currentBlock = when (currentBlock.type) {
-            "Start", "Print", "Declare", "Set" -> {
+            "Start", "Print Var", "Declare Var", "Set Var", "Print Array", "Declare Array", "Set Array" -> {
                 blocks.find { it.id == currentBlock.params["nextBlock"]?.toIntOrNull() }
             }
             "If" -> {
@@ -880,9 +1142,18 @@ fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
             else -> null
         }
     }
-    appState.appendToConsole("=== ===")
+    appState.appendToConsole("=== Переменные ===")
     for (item in appState.variables) {
         appState.appendToConsole("${item.key.toString()} ${item.value.second.toString()}")
+    }
+    appState.appendToConsole("=== Массивы ===")
+    for (item in appState.arrays) {
+        appState.appendToConsole("${item.key.toString()} ${item.value.second.toString()}")
+
+        val name = item.key.toString()
+        val array = appState.arrays[name]?.second
+        appState.appendToConsole("$name: ${array?.contentToString()}")
+
     }
     appState.appendToConsole("=== ===")
     for (item in blocks) {
@@ -908,7 +1179,6 @@ fun debugProgram(appState: AppState, blocks: List<CodeBlock>) {
 }
 
 fun executeDebugStep(appState: AppState, blocks: List<CodeBlock>) {
-    // Получаем актуальную версию блока из списка blocks
     val currentId = appState.currentDebugBlock?.id ?: return
     val currentBlock = blocks.find { it.id == currentId } ?: return
 
@@ -916,7 +1186,7 @@ fun executeDebugStep(appState: AppState, blocks: List<CodeBlock>) {
     appState.appendToConsole(currentBlock.generateCode())
 
     val nextBlock = when (currentBlock.type) {
-        "Start", "Print", "Declare", "Set" -> {
+        "Start", "Print Var", "Declare Var", "Set Var", "Print Array", "Declare Array", "Set Array" -> {
             blocks.find { it.id == currentBlock.params["nextBlock"]?.toIntOrNull() }
         }
         "If" -> {
@@ -1124,4 +1394,35 @@ private fun DrawScope.drawConnection(
         end = Offset(arrowX2.toFloat(), arrowY2.toFloat()),
         strokeWidth = 2.dp.toPx()
     )
+}
+
+
+sealed class BlockCategory {
+    object Core : BlockCategory()
+    object Variables : BlockCategory()
+    object Arrays : BlockCategory()
+}
+
+val blockCategories = listOf(
+    BlockCategory.Core,
+    BlockCategory.Variables,
+    BlockCategory.Arrays
+)
+
+val blockSubTypes = mapOf(
+    BlockCategory.Core to listOf("Start", "End", "If"),
+    BlockCategory.Variables to listOf("Declare Var", "Set Var", "Print Var"),
+    BlockCategory.Arrays to listOf("Declare Array", "Set Array", "Print Array", "Get Array Element")
+)
+
+@Composable
+fun BlockIcon(type: String) {
+    when {
+        type == "Start" -> Icon(Icons.Default.PlayArrow, null)
+        type == "End" -> Icon(Icons.Default.Lock, null)
+        type.contains("Var") -> Icon(Icons.Default.Star, null)
+        type.contains("Array") -> Icon(Icons.Default.DateRange, null)
+        type == "If" -> Icon(Icons.Default.Share, null)
+        else -> Icon(Icons.Default.Home, null)
+    }
 }
