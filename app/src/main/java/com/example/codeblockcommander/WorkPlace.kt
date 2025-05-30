@@ -1,6 +1,7 @@
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -31,6 +32,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import com.example.codeblockcommander.ui.theme.Parser
@@ -82,7 +85,6 @@ fun WorkPlace(navController: NavController) {
                 title = { Text("Рабочая область") },
                 actions = {
                     Row {
-                        // Кнопка запуска
                         FloatingActionButton(
                             onClick = { executeProgram(appState, blocks) },
                             modifier = Modifier.padding(end = 8.dp),
@@ -91,16 +93,34 @@ fun WorkPlace(navController: NavController) {
                             Icon(Icons.Default.PlayArrow, "Запуск")
                         }
 
-                        // Кнопка отладки
-                        FloatingActionButton(
-                            onClick = { debugProgram(appState, blocks) },
-                            modifier = Modifier.padding(end = 8.dp),
-                            containerColor = Color.Blue
-                        ) {
-                            Icon(Icons.Default.Build, "Отладка")
+                        if (appState.isDebugging) {
+                            FloatingActionButton(
+                                onClick = {
+                                    if (appState.debugPaused) {
+                                        appState.debugPaused = false
+                                        executeDebugStep(appState, blocks)
+                                    } else {
+                                        appState.debugPaused = true
+                                    }
+                                },
+                                modifier = Modifier.padding(end = 8.dp),
+                                containerColor = Color.Blue
+                            ) {
+                                Icon(
+                                    if (appState.debugPaused) Icons.Default.PlayArrow else Icons.Default.Star,
+                                    "Шаг отладки"
+                                )
+                            }
+                        } else {
+                            FloatingActionButton(
+                                onClick = { debugProgram(appState, blocks) },
+                                modifier = Modifier.padding(end = 8.dp),
+                                containerColor = Color.Blue
+                            ) {
+                                Icon(Icons.Default.Build, "Отладка")
+                            }
                         }
 
-                        // Кнопка остановки
                         FloatingActionButton(
                             onClick = { stopProgram(appState) },
                             containerColor = Color.Red
@@ -190,6 +210,7 @@ fun WorkPlace(navController: NavController) {
                     .height(240.dp)
                     .background(Color.LightGray)
             ) {
+                DebugControls(appState, blocks)
                 Text(
                     text = appState.consoleText,
                     modifier = Modifier
@@ -199,6 +220,7 @@ fun WorkPlace(navController: NavController) {
                     color = Color.Black
                 )
             }
+
         }
 
     ) { padding ->
@@ -231,6 +253,7 @@ fun WorkPlace(navController: NavController) {
                             onDragStart = { draggedBlock = block },
                             onDragEnd = { draggedBlock = null },
                             onEdit = { editedBlock = block },
+                            appState = appState,
                             onPositionUpdate = { x, y ->
                                 blocks = blocks.map {
                                     if (it.id == block.id) it.copy(x = x, y = y) else it
@@ -290,12 +313,19 @@ fun DraggableBlock(
     onDragEnd: () -> Unit,
     onEdit: () -> Unit,
     onPositionUpdate: (Float, Float) -> Unit,
-    onNextBlockSelected: (Int, Int) -> Unit
+    onNextBlockSelected: (Int, Int) -> Unit,
+    appState: AppState
 ) {
     val d = LocalDensity.current
     var offsetX by remember { mutableStateOf(block.x) }
     var offsetY by remember { mutableStateOf(block.y) }
     var showNextBlockMenu by remember { mutableStateOf(false) }
+
+    val borderColor = when {
+        appState.currentDebugBlock?.id == block.id -> Color.Yellow
+        isDragged -> Color.White.copy(alpha = 0.0f)
+        else -> Color.Transparent
+    }
 
     Box(
         modifier = Modifier
@@ -312,6 +342,7 @@ fun DraggableBlock(
                 },
                 shape = RoundedCornerShape(8.dp)
             )
+            .border(5.dp, borderColor, RoundedCornerShape(8.dp))
             .combinedClickable(
                 onClick = { /* */ },
                 onLongClick = onEdit
@@ -340,7 +371,7 @@ fun DraggableBlock(
             Text(block.type, color = Color.White)
             Text("🟢", modifier = Modifier.padding(top = 4.dp))
 
-            // Display block specific info
+            // Display
 
             when (block.type) {
                 "Print" -> Text(block.params["text"] ?: "", color = Color.White, fontSize = 12.sp)
@@ -352,7 +383,7 @@ fun DraggableBlock(
                     color = Color.White, fontSize = 12.sp)
             }
 
-            // Next block selector
+            // Next block
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -534,7 +565,7 @@ fun BlockEditDialog(
                             value = varValue,
                             onValueChange = { varValue = it }
                         )
-
+                        /*
                         Button(onClick = {
                             //appState.addVariable(varName, selectedType, varValue.ifEmpty { null })
                             onSave(mapOf(
@@ -548,6 +579,7 @@ fun BlockEditDialog(
                         }) {
                             Text("Сохранить")
                         }
+                        */
                     }
                     "Set" -> {
                         val declaredVars = blocks
@@ -639,13 +671,7 @@ fun BlockEditDialog(
                             Text(blocks.find { it.id == (block.params["falseBlock"]?.toIntOrNull() ?: -1)?.takeIf { it != -1 }}?.let { getBlockDisplayName(it, blocks) } ?: "Выберите блок")
                         }
 
-                        Text("Следующий блок:", modifier = Modifier.padding(top = 8.dp))
-                        Button(
-                            onClick = { showNextBlockMenu = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(blocks.find { it.id == (block.params["nextBlock"]?.toIntOrNull() ?: -1)?.takeIf { it != -1 }}?.let { getBlockDisplayName(it, blocks) } ?: "Выберите блок")
-                        }
+
                     }
                 }
 
@@ -868,13 +894,99 @@ fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
 }
 
 fun debugProgram(appState: AppState, blocks: List<CodeBlock>) {
+    appState.variables.clear()
+    val startBlock = blocks.find { it.type == "Start" } ?: run {
+        appState.appendToConsole("Ошибка: нет блока Start!")
+        return
+    }
+
+    appState.clearConsole()
     appState.appendToConsole("=== Режим отладки ===")
-    executeProgram(appState, blocks) // Пока аналогично, можно расширить
+    appState.isDebugging = true
+    appState.debugPaused = true
+    appState.currentDebugBlock = blocks.find { it.id == startBlock.id }
 }
 
-fun stopProgram(appState: AppState) {
-    appState.appendToConsole("=== Программа остановлена ===")
+fun executeDebugStep(appState: AppState, blocks: List<CodeBlock>) {
+    // Получаем актуальную версию блока из списка blocks
+    val currentId = appState.currentDebugBlock?.id ?: return
+    val currentBlock = blocks.find { it.id == currentId } ?: return
+
+    currentBlock.execute()
+    appState.appendToConsole(currentBlock.generateCode())
+
+    val nextBlock = when (currentBlock.type) {
+        "Start", "Print", "Declare", "Set" -> {
+            blocks.find { it.id == currentBlock.params["nextBlock"]?.toIntOrNull() }
+        }
+        "If" -> {
+            val expr = Parser(currentBlock.generateCode())
+            if (expr.toDouble() == 1.0) {
+                blocks.find { it.id == currentBlock.params["trueBlock"]?.toIntOrNull() }
+            } else {
+                blocks.find { it.id == currentBlock.params["falseBlock"]?.toIntOrNull() }
+            }
+        }
+        "End" -> null
+        else -> null
+    }
+
+    appState.currentDebugBlock = nextBlock
+
+    if (nextBlock == null) {
+        appState.appendToConsole("=== Отладка завершена ===")
+        appState.stopDebugging()
+    }
 }
+
+
+fun stopProgram(appState: AppState) {
+    appState.appendToConsole("=== Отладка прервана ===")
+    appState.stopDebugging()
+}
+
+
+@Composable
+fun DebugControls(appState: AppState, blocks: List<CodeBlock>) {
+    if (appState.isDebugging) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.LightGray)
+                .padding(8.dp)
+        ) {
+            Text("Режим отладки", fontWeight = FontWeight.Bold)
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(
+                    onClick = { executeDebugStep(appState, blocks) },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Шаг")
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Button(
+                    onClick = { stopProgram(appState) },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Стоп")
+                }
+            }
+
+            appState.currentDebugBlock?.let { block ->
+                Text("Текущий блок: ${block.type}", modifier = Modifier.padding(top = 8.dp))
+                Text(block.generateCode(), fontStyle = FontStyle.Italic)
+            }
+        }
+    }
+}
+
+
+
+
 
 @Composable
 fun ControlsPanel(

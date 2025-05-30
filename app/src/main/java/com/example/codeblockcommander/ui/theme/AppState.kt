@@ -11,7 +11,6 @@ class AppState {
     val debuggerState = DebuggerState()
     val variables = mutableMapOf<String, Pair<String, Any?>>()
     //val variables = mutableMapOf<String, Pair<String, Any?>>()
-    var isDebugging by mutableStateOf(false)
     var currentBlockId by mutableStateOf<Int?>(null)
 
     var consoleText by mutableStateOf("Консоль выполнения:\n")
@@ -23,6 +22,17 @@ class AppState {
 
     fun clearConsole() {
         consoleText = "Консоль выполнения:\n"
+    }
+
+
+    var isDebugging by mutableStateOf(false)
+    var currentDebugBlock by mutableStateOf<CodeBlock?>(null)
+    var debugPaused by mutableStateOf(true) // Начинаем в paused режиме
+
+    fun stopDebugging() {
+        isDebugging = false
+        currentDebugBlock = null
+        debugPaused = true
     }
 
     // Добавление переменной с автоматической инициализацией
