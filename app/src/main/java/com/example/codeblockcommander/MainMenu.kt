@@ -32,55 +32,65 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
+import android.content.res.Configuration
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 
 
 @Composable
 fun MainMenu(navController: NavController) {
-
+    val configuration = LocalConfiguration.current
+    val isLandscape = (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
     val scope = rememberCoroutineScope()
     var visibleText by remember { mutableStateOf(false) }
     var visibleButtons by remember { mutableStateOf(false) }
     val activity = (LocalContext.current as? Activity)
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val titleFontSize: TextUnit = when{
+        screenWidthDp < 360 -> 28.sp
+        screenWidthDp < 600 -> 36.sp
+        else -> 48.sp
+    }
+    val buttonWidth: Dp = (screenWidthDp * 0.6).dp
+    val buttonHeight: Dp = (screenHeightDp * 0.08).dp
+    val buttonTextSize: TextUnit = (buttonHeight.value * 0.4).sp
+    val paddingVertical: Dp = (screenHeightDp * 0.01).dp
+
     LaunchedEffect(Unit) {
         delay(100)
         visibleText = true
         delay(1000)
         visibleButtons = true
     }
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(
-            brush = Brush.verticalGradient(
-                colors = listOf(Color(0xFFAAE59C), Color(0xFF4D247F))
+    if (isLandscape) {
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color(0xFFAAE59C), Color(0xFF4D247F))
+                )
             )
         )
-    )
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        AnimatedVisibility(
-            visible = visibleText,
-            enter = fadeIn(animationSpec = tween(1000)),
-            exit = fadeOut(animationSpec = tween(1000))
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "КодСтрой",
-                style = MaterialTheme.typography.headlineLarge,
-                color = Color.White
+                fontSize = titleFontSize,
+                color = Color.White,
+                textAlign = TextAlign.Center
             )
-        }
-        AnimatedVisibility(
-            visible = visibleButtons,
-            enter = fadeIn(animationSpec = tween(1000)),
-            exit = fadeOut(animationSpec = tween(1000))
-        ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Spacer(modifier = Modifier.height(20.dp))
                 Button(
                     onClick = {
-                        //Log.v("123", "123");
+                        Log.v("123", "123");
                         scope.launch {
                             visibleButtons = false
                             visibleText = false
@@ -94,6 +104,60 @@ fun MainMenu(navController: NavController) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Button(onClick = { activity?.finish() }) {
                     Text("Выйти")
+                }
+            }
+        }
+    }
+    else {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(Color(0xFFAAE59C), Color(0xFF4D247F))
+                    )
+                )
+        )
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            AnimatedVisibility(
+                visible = visibleText,
+                enter = fadeIn(animationSpec = tween(1000)),
+                exit = fadeOut(animationSpec = tween(1000))
+            ) {
+                Text(
+                    text = "КодСтрой",
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = Color.White
+                )
+            }
+            AnimatedVisibility(
+                visible = visibleButtons,
+                enter = fadeIn(animationSpec = tween(1000)),
+                exit = fadeOut(animationSpec = tween(1000))
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = {
+                            Log.v("123", "123");
+                            scope.launch {
+                                visibleButtons = false
+                                visibleText = false
+                                delay(1000)
+                                navController.navigate("WorkPlace")
+                            }
+                        }
+                    ) {
+                        Text("Начать строить!")
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(onClick = { activity?.finish() }) {
+                        Text("Выйти")
+                    }
                 }
             }
         }
