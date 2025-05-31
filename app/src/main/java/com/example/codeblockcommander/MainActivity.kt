@@ -71,25 +71,11 @@ class MainActivity : ComponentActivity() {
                     composable("WorkPlace"){
                         WorkPlace(navController)
                     }
-                    composable("screen_3"){
-
-                    }
                 }
-                StartProgram()
             }
         }
     }
 }
-
-
-
-@Composable
-fun StartProgram() {
-
-}
-
-
-
 
 @Composable
 fun EditorToolbar() {

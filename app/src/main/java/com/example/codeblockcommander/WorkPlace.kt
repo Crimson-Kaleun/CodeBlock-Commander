@@ -833,25 +833,29 @@ fun executeProgram(appState: AppState, blocks: List<CodeBlock>) {
     while (currentBlock != null) {
         //appState.appendToConsole(currentBlock.generateCode())
         //appState.appendToConsole(currentBlock.execute())
-        currentBlock.execute()
-        currentBlock = when (currentBlock.type) {
+        val block = currentBlock
+        block.execute()
+        val nextId = when (block.type) {
             "Start", "Print", "Declare", "Set" -> {
-                blocks.find { it.id == currentBlock.params["nextBlock"]?.toIntOrNull() }
+                block.params["nextBlock"]?.toIntOrNull()
             }
             "If" -> {
-                val expr = Parser(currentBlock.generateCode())
-                appState.appendToConsole(currentBlock.generateCode())
+                val expr = Parser(block.generateCode())
+                appState.appendToConsole(block.generateCode())
                 appState.appendToConsole(expr)
 
                 if (expr.toDouble() == 1.0){
-                    blocks.find { it.id == currentBlock.params["trueBlock"]?.toIntOrNull() }
+                    blocks.find { it.id == block.params["trueBlock"]?.toIntOrNull() }
                 }
                 else {
-                    blocks.find { it.id == currentBlock.params["falseBlock"]?.toIntOrNull() }
+                    blocks.find { it.id == block.params["falseBlock"]?.toIntOrNull() }
                 }
             }
             "End" -> null
             else -> null
+        }
+        currentBlock = nextId?.let { id ->
+            blocks.find { it.id == id }
         }
     }
     appState.appendToConsole("=== ===")
