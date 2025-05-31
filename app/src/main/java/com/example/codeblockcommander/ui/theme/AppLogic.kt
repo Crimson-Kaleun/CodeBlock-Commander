@@ -1,15 +1,18 @@
 package com.example.codeblockcommander.ui.theme
+import AppState
 import java.util.ArrayDeque
+import kotlin.collections.mutableMapOf
 
 fun Boolean.toInt() = if (this) 1 else 0
 fun Boolean.toDouble() = if (this) 1.0 else 0.0;
 fun Int.toBool() = if (this==0) false else true;
 fun Double.toBool() = if (this==0.0) false else true;
 
-fun Parser(expr: String): String{
+fun Parser(expr: String, appState: AppState): String{
+    var variables = appState.variables.mapValues { it.value.second }
     var expression = expr
     expression = expression.replace("\\.\\.+".toRegex(), ".")
-    val variables = mapOf("x" to 5.0, "y" to 4.0, "z" to 10.0)
+    //val variables = mapOf("x" to 5.0, "y" to 4.0, "z" to 10.0)
     try {
         val postfix = infixToPostfix(expression)
         println("Постфикс (Обратная польская): $postfix")
@@ -92,7 +95,7 @@ fun infixToPostfix(infix: String): String {
 }
 
 //Из польской нотации в ответ
-fun evaluatePostfix(postfix: String, variables: Map<String, Double> = emptyMap()): Double {
+fun evaluatePostfix(postfix: String, variables: Map<String, Any?> = emptyMap()): Double {
     val stack = ArrayDeque<Double>()
     val tokens = postfix.split(" ").filter { it.isNotBlank() }
 
@@ -102,7 +105,7 @@ fun evaluatePostfix(postfix: String, variables: Map<String, Double> = emptyMap()
             token.toDoubleOrNull() != null -> stack.push(token.toDouble())
 
             //Переменная
-            token in variables -> stack.push(variables[token]!!)
+            token in variables -> stack.push(variables[token].toString().toDouble())
 
             //Унарный минус
             token == "~" -> {

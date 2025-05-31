@@ -4,6 +4,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.example.codeblockcommander.ui.theme.Parser
+import com.example.codeblockcommander.ui.theme.isCorrectName
 import rememberAppState
 import kotlin.collections.set
 
@@ -35,7 +36,6 @@ class AppState {
         debugPaused = true
     }
 
-    // Добавление переменной с автоматической инициализацией
     fun addVariable(name: String, type: String, value: String? = null) {
         val actualValue = value ?: when (type) {
             "Int" -> 0
@@ -44,18 +44,16 @@ class AppState {
             "String" -> ""
             else -> null
         }
-        variables[name] = type to Parser(actualValue.toString())
+        variables[name] = type to Parser(actualValue.toString(), this)
     }
 
-    // Обновление значения переменной
     fun updateVariable(name: String, value: String) {
         variables[name]?.let { (type, _) ->
-            val new_value = Parser(value.toString())
+            val new_value = Parser(value.toString(), this)
             variables[name] = type to new_value
         }
     }
 
-    // Получение типа переменной
     fun getVariableType(name: String): String? {
         return variables[name]?.first
     }
@@ -63,7 +61,6 @@ class AppState {
 
     val arrays = mutableMapOf<String, Pair<String, Array<Any?>>>()
 
-    // Добавление массива
     fun addArray(name: String, type: String, size: Int) {
         val initialValue = when (type) {
             "Int" -> 0
@@ -75,22 +72,62 @@ class AppState {
         arrays[name] = type to Array(size) { 0 }
     }
 
-    // Установка элемента массива
-    fun setArrayElement(name: String, index: Int, value: Any) {
+    fun setArrayElement(name: String, indexStr: String, valueStr: String) {
         arrays[name]?.let { (type, array) ->
-            when (type) {
-                "Int" -> array[index] = value.toString().toInt()
-                "Double" -> array[index] = value.toString().toDouble()
-                "Boolean" -> array[index] = value.toString().toBoolean()
-                else -> array[index] = value
+            val index = try {
+                indexStr.toDouble().toInt()
+            } catch (e: NumberFormatException) {
+                variables[indexStr]?.second?.toString()?.toDouble()?.toInt() ?: run {
+                    appendToConsole("Ошибка: неверный индекс '$indexStr'")
+                    return
+                }
             }
-        }
+
+            if (index !in array.indices) {
+                appendToConsole("Ошибка: индекс $index выходит за границы массива")
+                return
+            }
+
+            val value = try {
+                when (type) {
+                    "IntArray" ->
+                        valueStr.toIntOrNull() ?: variables[valueStr]?.second?.toString()?.toInt()
+                    "DoubleArray" ->
+                        valueStr.toDoubleOrNull() ?: variables[valueStr]?.second?.toString()?.toDouble()
+                    "BooleanArray" ->
+                        valueStr.toBooleanStrictOrNull() ?: variables[valueStr]?.second?.toString()?.toBoolean()
+                    else ->
+                        variables[valueStr]?.second ?: valueStr
+                }
+            } catch (e: Exception) {
+                appendToConsole("Ошибка преобразования значения '$valueStr': ${e.message}")
+                return
+            }
+
+            if (value == null) {
+                appendToConsole("Ошибка: неверное значение '$valueStr'")
+                return
+            }
+
+            try {
+                when (type) {
+                    "IntArray" -> array[index] = value as Int
+                    "DoubleArray" -> array[index] = value as Double
+                    "BooleanArray" -> array[index] = value as Boolean
+                    else -> array[index] = value
+                }
+                appendToConsole("Установлено: $name[$index] = $value")
+            } catch (e: ClassCastException) {
+                appendToConsole("Ошибка: несоответствие типа значения для массива $name")
+            }
+        } ?: appendToConsole("Ошибка: массив '$name' не найден")
     }
 
-    // Получение элемента массива
+
     fun getArrayElement(name: String, index: Int): Any? {
         return arrays[name]?.second?.getOrNull(index)
     }
+
 
 
 }
@@ -192,7 +229,7 @@ data class CodeBlock(
 
             "Set Array" -> {
                 val name = params["arrayName"] ?: ""
-                val index = params["arrayId"]?.toIntOrNull() ?: 0
+                val index = params["arrayId"] ?: ""
                 val value = params["arrayValue"] ?: ""
                 appState.setArrayElement(name, index, value)
             }
@@ -202,6 +239,31 @@ data class CodeBlock(
                 val array = appState.arrays[name]?.second
                 //appState.appendToConsole("$name: ${array?.contentToString()}")
                 appState.appendToConsole("${array.toString()}")
+            }
+            "Get Array Element" -> {
+                val targetVar = params["varName"] ?: ""
+                val arrayName = params["arrayName"] ?: ""
+                val indexStr = params["arrayId"] ?: "0"
+
+                if (targetVar !in appState.variables) {
+                    appState.appendToConsole("Ошибка: переменная '$targetVar' не объявлена")
+                    return@execute
+                }
+
+                val index = try {
+                    indexStr.toIntOrNull() ?: appState.variables[indexStr]?.second.toString().toInt()
+                } catch (e: Exception) {
+                    appState.appendToConsole("Ошибка: неверный индекс '$indexStr'")
+                    return@execute
+                }
+
+                val value = appState.arrays[arrayName]?.second?.getOrNull(index) ?: run {
+                    appState.appendToConsole("Ошибка: массив '$arrayName' или индекс $index не существует")
+                    return@execute
+                }
+
+                appState.variables[targetVar] = appState.variables[targetVar]!!.first to value
+                appState.appendToConsole("Успешно: $targetVar = $arrayName[$index] = $value")
             }
 
         }
