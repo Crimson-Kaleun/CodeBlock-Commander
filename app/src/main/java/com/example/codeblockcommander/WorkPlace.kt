@@ -241,6 +241,20 @@ fun WorkPlace(navController: NavController) {
                                                         "nextBlock" to "-1",
                                                     )
                                                 )
+                                                "If" -> CodeBlock(
+                                                    id = System.currentTimeMillis().toInt(),
+                                                    type = type,
+                                                    x = 500f,
+                                                    y = 200f,
+                                                    appState = appState,
+                                                    params = mapOf(
+                                                        "leftExpr" to "",
+                                                        "condition" to "==",
+                                                        "rightExpr" to "",
+                                                        "trueBlock" to "-1",
+                                                        "falseBlock" to "-1",
+                                                    )
+                                                )
 
 
 
@@ -1272,6 +1286,7 @@ fun executeDebugStep(appState: AppState, blocks: List<CodeBlock>) {
     currentBlock.execute()
     appState.appendToConsole(currentBlock.generateCode())
 
+
     val nextBlock = when (currentBlock.type) {
         "Start", "Print Var", "Declare Var", "Set Var", "Print Array", "Declare Array", "Set Array" -> {
             blocks.find { it.id == currentBlock.params["nextBlock"]?.toIntOrNull() }
@@ -1333,9 +1348,25 @@ fun DebugControls(appState: AppState, blocks: List<CodeBlock>) {
                 }
             }
 
+            var text = ""
+            for (item in appState.variables) {
+                text += "${item.key.toString()} ${item.value.second.toString()}\n"
+            }
+            for (item in appState.arrays) {
+                //appState.appendToConsole("${item.key.toString()} ${item.value.second.toString()}")
+
+                val name = item.key.toString()
+                val array = appState.arrays[name]?.second
+                text += "$name: ${array?.contentToString()}\n"
+
+            }
+
             appState.currentDebugBlock?.let { block ->
                 Text("Текущий блок: ${block.type}", modifier = Modifier.padding(top = 8.dp))
-                Text(block.generateCode(), fontStyle = FontStyle.Italic)
+                Text(
+                    //block.generateCode(),
+                    text = text,
+                    fontStyle = FontStyle.Italic)
             }
         }
     }
